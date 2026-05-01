@@ -1,6 +1,7 @@
 import { DirType } from '@shared/constants'
 import type { AllowedImageMime } from '@shared/schemas'
 import type { ImageHosting, StorageObject } from '@shared/types'
+import type { UploadRunnerContext } from '@/components/upload/upload-queue'
 import { confirmIhostImage, createIhostImagePresign, deleteIhostImage, listIhostImages, uploadToS3 } from '@/lib/api'
 
 // Extended StorageObject that carries image-host specific fields.
@@ -56,10 +57,20 @@ function deriveDefaultPath(file: File): string {
   return `${ts}_${base}.${ext}`
 }
 
-async function uploadImage(file: File): Promise<void> {
+async function uploadImage(file: File, ctx: UploadRunnerContext): Promise<void> {
+  ctx.setStatus('preparing')
   const path = deriveDefaultPath(file)
   const draft = await createIhostImagePresign({ path, mime: file.type as AllowedImageMime, size: file.size })
-  await uploadToS3(draft.uploadUrl, file)
+  ctx.registerCleanup(async () => {
+    await deleteIhostImage(draft.id)
+  })
+  if (ctx.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
+
+  ctx.setStatus('uploading')
+  await uploadToS3(draft.uploadUrl, file, { onProgress: ctx.onProgress, signal: ctx.signal })
+  if (ctx.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
+
+  ctx.setStatus('confirming')
   await confirmIhostImage(draft.id)
 }
 

@@ -15,6 +15,7 @@ vi.mock('@/lib/api', () => ({
   deleteIhostImage: vi.fn(),
 }))
 
+import type { UploadRunnerContext } from '@/components/upload/upload-queue'
 import { confirmIhostImage, createIhostImagePresign, deleteIhostImage, listIhostImages, uploadToS3 } from '@/lib/api'
 import { imageHostDataSource } from './image-host-data-source'
 
@@ -38,6 +39,16 @@ function makeImageHosting(overrides: Partial<ImageHosting> = {}): ImageHosting {
     accessCount: 5,
     lastAccessedAt: null,
     createdAt: '2024-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function makeUploadCtx(overrides: Partial<UploadRunnerContext> = {}): UploadRunnerContext {
+  return {
+    signal: new AbortController().signal,
+    onProgress: vi.fn(),
+    setStatus: vi.fn(),
+    registerCleanup: vi.fn(),
     ...overrides,
   }
 }
@@ -118,7 +129,7 @@ describe('imageHostDataSource.list', () => {
     expect(ihostItem.token).toBe('tok_xyz')
   })
 
-  it('computes url as /r/${token}.${ext} for png mime', async () => {
+  it('computes url from token and extension for png mime', async () => {
     const img = makeImageHosting({ token: 'tok_abc', mime: 'image/png' })
     vi.mocked(listIhostImages).mockResolvedValue({ items: [img], nextCursor: null })
 
@@ -251,7 +262,7 @@ describe('imageHostDataSource.upload', () => {
     const file = new File(['data'], 'photo.png', { type: 'image/png' })
     Object.defineProperty(file, 'size', { value: 1024 })
 
-    await imageHostDataSource.upload(file)
+    await imageHostDataSource.upload(file, makeUploadCtx())
 
     expect(createIhostImagePresign).toHaveBeenCalledWith(expect.objectContaining({ mime: 'image/png', size: 1024 }))
   })
@@ -259,15 +270,19 @@ describe('imageHostDataSource.upload', () => {
   it('calls uploadToS3 with the presigned url and file', async () => {
     const file = new File(['data'], 'photo.png', { type: 'image/png' })
 
-    await imageHostDataSource.upload(file)
+    await imageHostDataSource.upload(file, makeUploadCtx())
 
-    expect(uploadToS3).toHaveBeenCalledWith('https://s3/presigned', file)
+    expect(uploadToS3).toHaveBeenCalledWith(
+      'https://s3/presigned',
+      file,
+      expect.objectContaining({ onProgress: expect.any(Function), signal: expect.any(AbortSignal) }),
+    )
   })
 
   it('calls confirmIhostImage with the draft id', async () => {
     const file = new File(['data'], 'photo.png', { type: 'image/png' })
 
-    await imageHostDataSource.upload(file)
+    await imageHostDataSource.upload(file, makeUploadCtx())
 
     expect(confirmIhostImage).toHaveBeenCalledWith('draft-1')
   })
@@ -293,7 +308,7 @@ describe('imageHostDataSource.upload', () => {
     })
 
     const file = new File(['data'], 'photo.png', { type: 'image/png' })
-    await imageHostDataSource.upload(file)
+    await imageHostDataSource.upload(file, makeUploadCtx())
 
     expect(order).toEqual(['presign', 's3', 'confirm'])
   })
@@ -301,7 +316,7 @@ describe('imageHostDataSource.upload', () => {
   it('generates path with timestamp and base filename', async () => {
     const file = new File(['data'], 'my photo.png', { type: 'image/png' })
 
-    await imageHostDataSource.upload(file)
+    await imageHostDataSource.upload(file, makeUploadCtx())
 
     const call = vi.mocked(createIhostImagePresign).mock.calls[0][0]
     // path should match: ${timestamp}_${sanitized_base}.${ext}
@@ -311,7 +326,7 @@ describe('imageHostDataSource.upload', () => {
   it('generates path with jpg ext for jpeg mime', async () => {
     const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
 
-    await imageHostDataSource.upload(file)
+    await imageHostDataSource.upload(file, makeUploadCtx())
 
     const call = vi.mocked(createIhostImagePresign).mock.calls[0][0]
     expect(call.path).toMatch(/\.jpg$/)

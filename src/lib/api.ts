@@ -139,6 +139,12 @@ export function confirmUpload(id: string, onConflict?: ConflictStrategy) {
   )
 }
 
+export function cancelUpload(id: string) {
+  return unwrap<{ id: string; cancelled: boolean }>(
+    objects[':id'].$patch({ param: { id }, json: { action: 'cancel' as const } }),
+  )
+}
+
 export function deleteObject(id: string) {
   return unwrap<{ id: string; deleted: boolean; purged?: number }>(objects[':id'].$delete({ param: { id } }))
 }
@@ -633,14 +639,56 @@ export async function getSession(): Promise<{ session: unknown; user: unknown } 
   return res.json()
 }
 
+export interface UploadProgress {
+  loaded: number
+  total: number
+}
+
+export interface UploadToS3Options {
+  onProgress?: (progress: UploadProgress) => void
+  signal?: AbortSignal
+}
+
 // S3 direct upload (external presigned URL, not our API)
-export function uploadToS3(url: string, file: File): Promise<void> {
-  return fetch(url, {
-    method: 'PUT',
-    body: file,
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
-  }).then((res) => {
-    if (!res.ok) throw new Error('Upload failed')
+export function uploadToS3(url: string, file: File, options: UploadToS3Options = {}): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const abort = () => {
+      xhr.abort()
+      reject(new DOMException('Upload cancelled', 'AbortError'))
+    }
+
+    if (options.signal?.aborted) {
+      reject(new DOMException('Upload cancelled', 'AbortError'))
+      return
+    }
+
+    options.signal?.addEventListener('abort', abort, { once: true })
+    xhr.upload.onprogress = (event) => {
+      options.onProgress?.({
+        loaded: event.loaded,
+        total: event.lengthComputable ? event.total : file.size,
+      })
+    }
+    xhr.onload = () => {
+      options.signal?.removeEventListener('abort', abort)
+      if (xhr.status >= 200 && xhr.status < 300) {
+        options.onProgress?.({ loaded: file.size, total: file.size })
+        resolve()
+        return
+      }
+      reject(new Error('Upload failed'))
+    }
+    xhr.onerror = () => {
+      options.signal?.removeEventListener('abort', abort)
+      reject(new Error('Upload failed'))
+    }
+    xhr.onabort = () => {
+      options.signal?.removeEventListener('abort', abort)
+    }
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.send(file)
   })
 }
 

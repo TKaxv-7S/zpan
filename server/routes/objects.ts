@@ -14,6 +14,7 @@ import type { Env } from '../middleware/platform'
 import {
   batchMove,
   batchTrash,
+  cancelDraftMatter,
   collectForPurge,
   confirmUpload,
   copyMatter,
@@ -209,6 +210,21 @@ const app = new Hono<Env>()
           if (e instanceof NameConflictError) return c.json(conflictBody(e), 409)
           throw e
         }
+      }
+      case 'cancel': {
+        const matter = await cancelDraftMatter(db, c.req.param('id'), orgId)
+        if (!matter) return c.json({ error: 'Not found or not in draft status' }, 404)
+        if (matter.object) {
+          const storage = (await getStorage(db, matter.storageId)) as unknown as S3Storage | null
+          if (storage) {
+            try {
+              await s3.deleteObject(storage, matter.object)
+            } catch {
+              // Best-effort cleanup: the browser may abort before S3 writes anything.
+            }
+          }
+        }
+        return c.json({ id: matter.id, cancelled: true })
       }
       case 'trash': {
         const matter = await trashMatter(db, orgId, c.req.param('id'), userId)

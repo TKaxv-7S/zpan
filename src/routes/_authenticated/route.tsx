@@ -3,6 +3,7 @@ import { AppSidebar } from '@/components/layout/app-sidebar'
 import { GlobalSearchBar } from '@/components/layout/global-search-bar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { UploadStatusButton } from '@/components/upload/upload-queue'
 import { getSession } from '@/lib/api'
 
 export const Route = createFileRoute('/_authenticated')({
@@ -30,7 +31,8 @@ function AuthenticatedLayout() {
         <header className="flex h-14 min-w-0 shrink-0 items-center gap-3 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <GlobalSearchBar />
-          <div className="ml-auto flex shrink-0 items-center">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <UploadStatusButton />
             <NotificationBell />
           </div>
         </header>

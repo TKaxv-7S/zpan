@@ -19,6 +19,7 @@ import { FilePreviewDialog } from '@/components/preview/file-preview-dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { UploadDropzone, type UploadDropzoneHandle } from '@/components/upload/upload-dropzone'
+import type { UploadRunnerContext } from '@/components/upload/upload-queue'
 import { getObject, listObjectsByPath } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { getColumns } from './columns'
@@ -111,7 +112,7 @@ interface FileManagerProps {
     list: (path: string, opts: { filterType?: string; search?: string }) => Promise<{ items: StorageObject[] }>
     getPreviewFile?: (item: StorageObject) => Promise<PreviewFile | null>
     download?: (item: StorageObject) => Promise<void> | void
-    upload?: (file: File, onProgress?: (pct: number) => void) => Promise<void>
+    upload?: (file: File, ctx: UploadRunnerContext) => Promise<void>
   }
   capabilities?: {
     selection?: boolean
@@ -531,7 +532,7 @@ export function FileManager({
       ref={dropzoneRef}
       parent={currentPath}
       onUploadComplete={dataSource?.upload ? () => query.refetch() : () => mutations.invalidate()}
-      uploadFn={dataSource?.upload ? (file) => dataSource.upload!(file) : undefined}
+      uploadFn={dataSource?.upload ? (file, ctx) => dataSource.upload!(file, ctx) : undefined}
       conflictPrompt={dataSource?.upload ? undefined : conflict.prompt}
       onConflictBatchStart={dataSource?.upload ? undefined : conflict.reset}
     >

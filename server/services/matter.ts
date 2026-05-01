@@ -380,6 +380,14 @@ export async function deleteMatter(db: Database, id: string, orgId: string): Pro
   return existing
 }
 
+export async function cancelDraftMatter(db: Database, id: string, orgId: string): Promise<Matter | null> {
+  const existing = await getMatter(db, id, orgId)
+  if (!existing || existing.status !== 'draft') return null
+
+  await db.delete(matters).where(and(eq(matters.id, id), eq(matters.orgId, orgId), eq(matters.status, 'draft')))
+  return existing
+}
+
 // ─── Batch Operations ────────────────────────────────────────────────────────
 
 export async function getMatters(db: Database, orgId: string, ids: string[]): Promise<Matter[]> {

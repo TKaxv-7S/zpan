@@ -73,6 +73,9 @@ export const patchMatterSchema = z.discriminatedUnion('action', [
     onConflict: conflictStrategySchema.optional(),
   }),
   z.object({
+    action: z.literal('cancel'),
+  }),
+  z.object({
     action: z.literal('trash'),
   }),
   z.object({

@@ -293,6 +293,47 @@ describe('Objects API', () => {
     expect(res.status).toBe(404)
   })
 
+  it('PATCH /api/objects/:id (action: cancel) deletes a draft upload and cleans up S3', async () => {
+    const { app, db } = await createTestApp()
+    const headers = await authedHeaders(app)
+    await insertStorage(db)
+    const orgId = await getOrgId(db)
+    await insertFile(db, orgId, { id: 'draft-cancel', name: 'cancel.txt', status: 'draft' })
+
+    const res = await app.request('/api/objects/draft-cancel', {
+      method: 'PATCH',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel' }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { id: string; cancelled: boolean }
+    expect(body).toEqual({ id: 'draft-cancel', cancelled: true })
+    expect(S3Service.prototype.deleteObject).toHaveBeenCalledWith(
+      expect.objectContaining({ id: validStorage.id }),
+      'some/key.txt',
+    )
+
+    const check = await app.request('/api/objects/draft-cancel', { headers })
+    expect(check.status).toBe(404)
+  })
+
+  it('PATCH /api/objects/:id (action: cancel) returns 404 for active object', async () => {
+    const { app, db } = await createTestApp()
+    const headers = await authedHeaders(app)
+    await insertStorage(db)
+    const orgId = await getOrgId(db)
+    await insertFile(db, orgId, { id: 'active-cancel', name: 'active.txt', status: 'active' })
+
+    const res = await app.request('/api/objects/active-cancel', {
+      method: 'PATCH',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel' }),
+    })
+
+    expect(res.status).toBe(404)
+  })
+
   it('DELETE /api/objects/:id rejects active object (must trash first)', async () => {
     const { app, db } = await createTestApp()
     const headers = await authedHeaders(app)

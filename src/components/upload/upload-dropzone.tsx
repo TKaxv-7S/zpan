@@ -3,10 +3,10 @@ import { Upload } from 'lucide-react'
 import { forwardRef, useCallback, useImperativeHandle } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import type { Prompt } from '@/components/files/hooks/use-conflict-resolver'
 import { withConflictRetry } from '@/components/files/hooks/use-conflict-resolver'
-import { confirmUpload, createObject, isNameConflictError, uploadToS3 } from '../../lib/api'
+import { cancelUpload, confirmUpload, createObject, isNameConflictError, uploadToS3 } from '../../lib/api'
+import { type UploadRunnerContext, useUploadQueue } from './upload-queue'
 
 interface UploadDropzoneProps {
   parent: string
@@ -20,7 +20,7 @@ interface UploadDropzoneProps {
    * flow (create-draft → S3 PUT → confirm) and calls this instead.
    * Used by Image Host to upload via /api/ihost/images.
    */
-  uploadFn?: (file: File) => Promise<void>
+  uploadFn?: (file: File, ctx: UploadRunnerContext) => Promise<void>
   children: React.ReactNode
 }
 
@@ -38,7 +38,9 @@ async function uploadFile(
   parent: string,
   prompt: Prompt | undefined,
   showApplyToAll: boolean,
+  ctx: UploadRunnerContext,
 ): Promise<boolean | 'cancelled'> {
+  ctx.setStatus('preparing')
   // Step 1: create draft (resolves conflict against existing actives BEFORE the S3 PUT).
   const created = prompt
     ? await withConflictRetry(
@@ -64,11 +66,18 @@ async function uploadFile(
       })
   if (!created) return 'cancelled'
   if (!created.uploadUrl) throw new Error('No upload URL returned')
+  ctx.registerCleanup(async () => {
+    await cancelUpload(created.id)
+  })
+  if (ctx.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
 
-  await uploadToS3(created.uploadUrl, file)
+  ctx.setStatus('uploading')
+  await uploadToS3(created.uploadUrl, file, { onProgress: ctx.onProgress, signal: ctx.signal })
+  if (ctx.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
 
   // Step 2: confirm. Another client may have activated the same name during our
   // S3 PUT — repeat the resolver here so replace/rename still works.
+  ctx.setStatus('confirming')
   try {
     await confirmUpload(created.id)
   } catch (e) {
@@ -80,78 +89,65 @@ async function uploadFile(
   return true
 }
 
+function makeQueuedPrompt(prompt: Prompt): Prompt {
+  let tail = Promise.resolve()
+  return (args) => {
+    const run = tail.then(() => prompt(args))
+    tail = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
+  }
+}
+
 export const UploadDropzone = forwardRef<UploadDropzoneHandle, UploadDropzoneProps>(
   ({ parent, onUploadComplete, conflictPrompt, onConflictBatchStart, uploadFn, children }, ref) => {
     const { t } = useTranslation()
+    const uploadQueue = useUploadQueue()
 
     const onDrop = useCallback(
       async (files: File[]) => {
+        if (files.length === 0) return
+
         // Custom upload path (e.g. image host)
         if (uploadFn) {
-          let anySuccess = false
-          for (const file of files) {
-            const p = uploadFn(file)
-            toast.promise(p, {
-              loading: t('files.uploading', { name: file.name }),
-              success: t('files.uploadSuccess', { name: file.name }),
-              error: t('files.uploadFailed', { name: file.name }),
-            })
-            try {
-              await p
-              anySuccess = true
-            } catch {
-              // Toast already surfaced the error — continue.
-            }
-          }
-          if (anySuccess) onUploadComplete()
+          uploadQueue.enqueue(
+            files.map((file) => ({
+              file,
+              run: (ctx) => uploadFn(file, ctx),
+            })),
+            (hadSuccess) => {
+              if (hadSuccess) onUploadComplete()
+            },
+          )
           return
         }
 
         // Default object-upload path
         onConflictBatchStart?.()
         const showApplyToAll = files.length > 1
-        let anySuccess = false
-        let processed = 0
+        const queuedPrompt = conflictPrompt ? makeQueuedPrompt(conflictPrompt) : undefined
 
-        // Process sequentially so the resolver's "apply to all" sticks across files.
-        for (const file of files) {
-          const p = uploadFile(file, parent, conflictPrompt, showApplyToAll)
-          toast.promise(
-            p.then((result) => {
-              if (result === 'cancelled') throw new Error('cancelled')
-              return result
-            }),
-            {
-              loading: t('files.uploading', { name: file.name }),
-              success: t('files.uploadSuccess', { name: file.name }),
-              error: (err: Error) =>
-                err.message === 'cancelled' ? null : t('files.uploadFailed', { name: file.name }),
+        uploadQueue.enqueue(
+          files.map((file) => ({
+            file,
+            run: async (ctx) => {
+              const result = await uploadFile(file, parent, queuedPrompt, showApplyToAll, ctx)
+              if (result === 'cancelled') throw new DOMException('Upload cancelled', 'AbortError')
             },
-          )
-          try {
-            const result = await p
-            processed++
-            if (result === true) anySuccess = true
-            if (result === 'cancelled') {
-              // Finder-style: cancelling a conflict aborts the rest of the batch.
-              // Tell the user what just happened so remaining files aren't a mystery.
-              const remaining = files.length - processed
-              if (remaining > 0) toast.info(t('files.uploadBatchCancelled', { count: remaining }))
-              break
-            }
-          } catch {
-            processed++
-            // Toast already surfaced the error — continue with next file.
-          }
-        }
-
-        if (anySuccess) onUploadComplete()
+          })),
+          (hadSuccess) => {
+            if (hadSuccess) onUploadComplete()
+          },
+        )
       },
-      [parent, uploadFn, onUploadComplete, conflictPrompt, onConflictBatchStart, t],
+      [parent, uploadFn, onUploadComplete, conflictPrompt, onConflictBatchStart, uploadQueue],
     )
 
     const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
       onDrop,
+      multiple: true,
       noClick: true,
       noKeyboard: true,
     })

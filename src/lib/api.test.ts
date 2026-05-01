@@ -5,6 +5,7 @@ import {
   batchMoveObjects,
   batchTrashObjects,
   buildShareObjectUrl,
+  cancelUpload,
   confirmIhostImage,
   confirmUpload,
   connectCloud,
@@ -330,6 +331,28 @@ describe('api', () => {
     })
   })
 
+  describe('cancelUpload', () => {
+    it('patches with action: cancel', async () => {
+      const payload = { id: 'id1', cancelled: true }
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(payload))
+
+      const result = await cancelUpload('id1')
+
+      expect(result).toEqual(payload)
+      const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/api/objects/id1')
+      expect(init.method).toBe('PATCH')
+      const body = typeof init.body === 'string' ? JSON.parse(init.body) : null
+      expect(body).toMatchObject({ action: 'cancel' })
+    })
+
+    it('throws on error response', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'not found' }, false, 404))
+
+      await expect(cancelUpload('missing')).rejects.toThrow('not found')
+    })
+  })
+
   describe('deleteObject', () => {
     it('sends DELETE request and returns deleted flag', async () => {
       const payload = { id: 'id1', deleted: true }
@@ -376,44 +399,110 @@ describe('api', () => {
   })
 
   describe('uploadToS3', () => {
+    class MockXMLHttpRequest {
+      static instances: MockXMLHttpRequest[] = []
+      upload = { onprogress: null as ((event: ProgressEvent) => void) | null }
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      onabort: (() => void) | null = null
+      status = 200
+      method = ''
+      url = ''
+      body: unknown
+      headers: Record<string, string> = {}
+
+      constructor() {
+        MockXMLHttpRequest.instances.push(this)
+      }
+
+      open(method: string, url: string) {
+        this.method = method
+        this.url = url
+      }
+
+      setRequestHeader(key: string, value: string) {
+        this.headers[key] = value
+      }
+
+      send(body: unknown) {
+        this.body = body
+      }
+
+      abort() {
+        this.onabort?.()
+      }
+    }
+
+    beforeEach(() => {
+      MockXMLHttpRequest.instances = []
+      vi.stubGlobal('XMLHttpRequest', MockXMLHttpRequest)
+    })
+
     it('PUTs file to presigned URL with correct content-type', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(null, true))
-
       const file = new File(['hello'], 'hello.txt', { type: 'text/plain' })
-      await uploadToS3('https://s3/presigned', file)
+      const promise = uploadToS3('https://s3/presigned', file)
+      const xhr = MockXMLHttpRequest.instances[0]
+      xhr.onload?.()
+      await promise
 
-      const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
-      expect(url).toBe('https://s3/presigned')
-      expect(init.method).toBe('PUT')
-      expect(init.body).toBe(file)
-      expect((init.headers as Record<string, string>)['Content-Type']).toBe('text/plain')
+      expect(xhr.url).toBe('https://s3/presigned')
+      expect(xhr.method).toBe('PUT')
+      expect(xhr.body).toBe(file)
+      expect(xhr.headers['Content-Type']).toBe('text/plain')
     })
 
     it('falls back to application/octet-stream when file type is empty', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(null, true))
-
       const file = new File(['data'], 'blob') // no type
-      await uploadToS3('https://s3/presigned', file)
+      const promise = uploadToS3('https://s3/presigned', file)
+      const xhr = MockXMLHttpRequest.instances[0]
+      xhr.onload?.()
+      await promise
 
-      const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
-      expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/octet-stream')
+      expect(xhr.headers['Content-Type']).toBe('application/octet-stream')
     })
 
     it('does not pass credentials on S3 upload', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(null, true))
-
       const file = new File(['x'], 'x.bin')
-      await uploadToS3('https://s3/presigned', file)
+      const promise = uploadToS3('https://s3/presigned', file)
+      const xhr = MockXMLHttpRequest.instances[0]
+      xhr.onload?.()
+      await promise
 
-      const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
-      expect((init as RequestInit).credentials).toBeUndefined()
+      expect('withCredentials' in xhr).toBe(false)
     })
 
     it('throws when S3 upload fails', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(null, false, 403))
-
       const file = new File(['x'], 'x.bin')
-      await expect(uploadToS3('https://s3/presigned', file)).rejects.toThrow('Upload failed')
+      const promise = uploadToS3('https://s3/presigned', file)
+      const xhr = MockXMLHttpRequest.instances[0]
+      xhr.status = 403
+      xhr.onload?.()
+      await expect(promise).rejects.toThrow('Upload failed')
+    })
+
+    it('reports upload progress', async () => {
+      const onProgress = vi.fn()
+      const file = new File(['hello'], 'hello.txt', { type: 'text/plain' })
+      Object.defineProperty(file, 'size', { value: 10 })
+
+      const promise = uploadToS3('https://s3/presigned', file, { onProgress })
+      const xhr = MockXMLHttpRequest.instances[0]
+      xhr.upload.onprogress?.({ loaded: 4, total: 10, lengthComputable: true } as ProgressEvent)
+      xhr.onload?.()
+      await promise
+
+      expect(onProgress).toHaveBeenCalledWith({ loaded: 4, total: 10 })
+      expect(onProgress).toHaveBeenLastCalledWith({ loaded: 10, total: 10 })
+    })
+
+    it('rejects with AbortError when aborted', async () => {
+      const controller = new AbortController()
+      const file = new File(['x'], 'x.bin')
+      const promise = uploadToS3('https://s3/presigned', file, { signal: controller.signal })
+
+      controller.abort()
+
+      await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
     })
   })
 
