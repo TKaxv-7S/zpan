@@ -11,7 +11,7 @@ interface MediaPreviewProps {
   previewType: PreviewType
 }
 
-function mimeFromExt(filename: string, previewType: PreviewType): string {
+export function mimeFromExt(filename: string, previewType: PreviewType): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
   if (previewType === 'audio') {
     const map: Record<string, string> = {

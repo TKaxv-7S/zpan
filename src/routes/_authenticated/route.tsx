@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect, useMatchRoute } from '@tanstack/react-router'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { GlobalSearchBar } from '@/components/layout/global-search-bar'
+import { MusicPlayerButton } from '@/components/music/music-player-button'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { UploadStatusButton } from '@/components/upload/upload-queue'
@@ -33,6 +34,7 @@ function AuthenticatedLayout() {
           <GlobalSearchBar />
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <UploadStatusButton />
+            <MusicPlayerButton />
             <NotificationBell />
           </div>
         </header>

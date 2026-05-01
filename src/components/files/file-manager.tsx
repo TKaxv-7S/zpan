@@ -14,6 +14,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { PageHeader, type PageHeaderItem } from '@/components/layout/page-header'
+import { isMusicPreviewFile } from '@/components/music/music-player-model'
+import { useMusicPlayer } from '@/components/music/music-player-provider'
 import type { PreviewFile } from '@/components/preview/file-preview-content'
 import { FilePreviewDialog } from '@/components/preview/file-preview-dialog'
 import { Button } from '@/components/ui/button'
@@ -202,6 +204,7 @@ export function FileManager({
   const [shareTarget, setShareTarget] = useState<StorageObject | null>(null)
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const musicPlayer = useMusicPlayer()
 
   const query = useQuery({
     queryKey: [...(dataSource?.queryKeyPrefix ?? ['objects', 'active', 'path']), currentPath, filterType ?? ''],
@@ -256,13 +259,17 @@ export function FileManager({
           toast.error(t('common.error'))
           return
         }
+        if (isMusicPreviewFile(file)) {
+          musicPlayer.play(file)
+          return
+        }
         setPreviewFile(file)
         setPreviewOpen(true)
       } catch {
         toast.error(t('common.error'))
       }
     },
-    [currentPath, dataSource, navigateToPath, t],
+    [currentPath, dataSource, musicPlayer, navigateToPath, t],
   )
 
   const handleDownload = useCallback(
