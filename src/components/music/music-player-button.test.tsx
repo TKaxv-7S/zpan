@@ -27,8 +27,16 @@ vi.mock('@vidstack/react/player/layouts/default', () => ({
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  PopoverContent: ({ children, className }: { children: ReactNode; className?: string }) => (
-    <div data-testid="music-popover" className={className}>
+  PopoverContent: ({
+    children,
+    className,
+    forceMount,
+  }: {
+    children: ReactNode
+    className?: string
+    forceMount?: boolean
+  }) => (
+    <div data-testid="music-popover" data-force-mount={forceMount ? 'true' : 'false'} className={className}>
       {children}
     </div>
   ),
@@ -84,6 +92,14 @@ describe('MusicPlayerButton', () => {
     expect(view.getByText('music.emptyHint')).toBeTruthy()
     expect(view.getByText('music.queueEmpty')).toBeTruthy()
     expect(getObject).not.toHaveBeenCalled()
+  })
+
+  it('force mounts the popover while hiding its closed state', () => {
+    const view = renderButton()
+    const popover = view.getByTestId('music-popover')
+
+    expect(popover.dataset.forceMount).toBe('true')
+    expect(popover.className).toContain('data-[state=closed]:hidden')
   })
 
   it('adds a file-browser play request to the local playlist', () => {

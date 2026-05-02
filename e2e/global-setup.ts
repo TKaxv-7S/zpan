@@ -11,6 +11,34 @@ const ADMIN_ACCOUNTS = [
   { email: 'admin@zpan.dev', password: 'adminadmin' },
 ]
 
+const storageConfig = {
+  title: 'E2E Storage',
+  mode: 'private',
+  bucket: 'e2e-test',
+  endpoint: 'https://localhost:9000',
+  region: 'auto',
+  accessKey: 'e2e-access-key',
+  secretKey: 'e2e-secret-key',
+  capacity: 0,
+  status: 'active',
+}
+
+type StorageItem = {
+  id: string
+  mode: string
+  capacity: number
+  used: number
+  status: string
+}
+
+function isAvailablePrivateStorage(storage: StorageItem) {
+  return (
+    storage.mode === 'private' &&
+    storage.status === 'active' &&
+    (storage.capacity === 0 || storage.used < storage.capacity)
+  )
+}
+
 setup('seed admin and storage', async ({ request }) => {
   const headers = { Origin: 'http://localhost:5173' }
 
@@ -54,21 +82,25 @@ setup('seed admin and storage', async ({ request }) => {
   // Check if storage already exists
   const list = await request.get('/api/admin/storages', { headers })
   if (list.ok()) {
-    const data = await list.json()
-    if (data.items?.length > 0) return
+    const data = (await list.json()) as { items?: StorageItem[] }
+    const storages = data.items ?? []
+    if (storages.some(isAvailablePrivateStorage)) return
+
+    const existing = storages[0]
+    if (existing) {
+      const resp = await request.put(`/api/admin/storages/${existing.id}`, {
+        headers,
+        data: storageConfig,
+      })
+      if (!resp.ok()) throw new Error(`could not update E2E storage: ${resp.status()}`)
+      return
+    }
   }
 
   // Seed storage
-  await request.post('/api/admin/storages', {
+  const resp = await request.post('/api/admin/storages', {
     headers,
-    data: {
-      title: 'E2E Storage',
-      mode: 'private',
-      bucket: 'e2e-test',
-      endpoint: 'https://localhost:9000',
-      region: 'auto',
-      accessKey: 'e2e-access-key',
-      secretKey: 'e2e-secret-key',
-    },
+    data: storageConfig,
   })
+  if (!resp.ok()) throw new Error(`could not create E2E storage: ${resp.status()}`)
 })

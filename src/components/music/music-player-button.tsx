@@ -94,11 +94,7 @@ export function MusicPlayerButton() {
           {currentTrack && <span className="absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-primary" />}
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        forceMount
-        align="end"
-        className={cn('w-80 overflow-hidden p-0', !player.open && 'pointer-events-none opacity-0')}
-      >
+      <PopoverContent forceMount align="end" className="w-80 overflow-hidden p-0 data-[state=closed]:hidden">
         <div className="border-b px-3 py-2">
           <p className="text-sm font-semibold">{t('music.player')}</p>
         </div>

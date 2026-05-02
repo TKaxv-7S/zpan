@@ -47,9 +47,10 @@ test.describe('Toolbar responsive layout', () => {
     await expect(toolbar).toBeVisible()
 
     // Primary file actions live in the page header on desktop.
-    await expect(page.getByTestId('page-header')).toBeVisible()
-    await expect(page.getByRole('button', { name: /Upload/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /New Folder/i })).toBeVisible()
+    const pageHeader = page.getByTestId('page-header')
+    await expect(pageHeader).toBeVisible()
+    await expect(pageHeader.getByRole('button', { name: /Upload/i })).toBeVisible()
+    await expect(pageHeader.getByRole('button', { name: /New Folder/i })).toBeVisible()
     await expect(page.getByLabel('List view')).toBeVisible()
     await expect(page.getByLabel('Grid view')).toBeVisible()
 
@@ -65,7 +66,7 @@ test.describe('Toolbar responsive layout', () => {
     const overflows = await toolbar.evaluate((el) => el.scrollWidth > el.clientWidth)
     expect(overflows).toBe(false)
 
-    await expect(page.getByRole('button', { name: 'Upload' })).toBeVisible()
+    await expect(page.getByTestId('page-header').getByRole('button', { name: 'Upload' })).toBeVisible()
   })
 
   test('mobile: toolbar does not overflow, upload button accessible @mobile', async ({ page }) => {
@@ -77,7 +78,7 @@ test.describe('Toolbar responsive layout', () => {
     const overflows = await toolbar.evaluate((el) => el.scrollWidth > el.clientWidth)
     expect(overflows).toBe(false)
 
-    await expect(page.getByRole('button', { name: /upload/i })).toBeVisible()
+    await expect(page.getByTestId('page-header').getByRole('button', { name: /upload/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /new folder|folder/i })).toBeVisible()
   })
 })
