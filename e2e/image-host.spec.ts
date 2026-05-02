@@ -94,28 +94,11 @@ test.describe('Image Host gallery golden path @all', () => {
       'base64',
     )
 
-    // Find upload area — grid or dropzone
-    const uploadInput = page.locator('input[type="file"]').first()
-    if (await uploadInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await uploadInput.setInputFiles({
-        name: 'test-image.png',
-        mimeType: 'image/png',
-        buffer: pngBytes,
-      })
-    } else {
-      // Trigger file chooser via upload button if available
-      const uploadBtn = page.getByRole('button', { name: /upload/i }).first()
-      if (await uploadBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        const fileChooser = page.waitForEvent('filechooser')
-        await uploadBtn.click()
-        const chooser = await fileChooser
-        await chooser.setFiles({
-          name: 'test-image.png',
-          mimeType: 'image/png',
-          buffer: pngBytes,
-        })
-      }
-    }
+    await page.locator('input[type="file"]').first().setInputFiles({
+      name: 'test-image.png',
+      mimeType: 'image/png',
+      buffer: pngBytes,
+    })
 
     // Wait for the presign + confirm API calls to complete
     await page
