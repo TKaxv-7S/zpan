@@ -20,7 +20,6 @@ test.describe('Uploader responsive behavior', () => {
   test('mobile: multi-file upload opens uploader, truncates long names, and scrolls vertically @mobile', async ({
     page,
   }) => {
-    test.slow()
     await signUpAndGoToFiles(page)
 
     await page.route('**/*', async (route) => {

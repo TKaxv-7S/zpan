@@ -21,7 +21,6 @@ test.describe('Name conflict — folders @all', () => {
   })
 
   test('409 on duplicate folder, Keep Both auto-renames, case-insensitive match', async ({ page }) => {
-    test.slow()
     await signUpAndGoToFiles(page)
     await createFolder(page, 'reports')
 

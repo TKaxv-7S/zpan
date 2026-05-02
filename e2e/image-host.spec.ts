@@ -76,7 +76,6 @@ test.describe('Image Host gallery golden path @all', () => {
   }
 
   test('upload → view in grid → switch to table', async ({ page }) => {
-    test.slow()
     await setupImageHost(page)
 
     // Intercept S3 PUT so upload completes without a real S3
@@ -126,7 +125,6 @@ test.describe('Image Host gallery golden path @all', () => {
   })
 
   test('copy URL with Markdown format via row actions', async ({ page, context }) => {
-    test.slow()
     await setupImageHost(page)
 
     // Grant clipboard permissions
@@ -187,7 +185,6 @@ test.describe('Image Host gallery golden path @all', () => {
   })
 
   test('delete with Undo → cancel → item restored', async ({ page }) => {
-    test.slow()
     await setupImageHost(page)
 
     // Seed an image
@@ -241,7 +238,6 @@ test.describe('Image Host gallery golden path @all', () => {
   })
 
   test('delete permanently (let timer expire)', async ({ page }) => {
-    test.slow()
     await setupImageHost(page)
 
     // Seed an image

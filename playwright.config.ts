@@ -30,7 +30,7 @@ export default defineConfig({
   // The suite shares one local dev server pair and one SQLite database. Keep
   // execution serial to avoid flaky connection resets and cross-test bleed.
   workers: 1,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: 'http://localhost:5173',
