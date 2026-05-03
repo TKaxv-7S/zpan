@@ -42,15 +42,19 @@ test.describe('Site announcements', () => {
 
       await page.context().clearCookies()
       await signUpAndGoToFiles(page)
-      await expect(page.getByRole('dialog').getByText(title)).toBeVisible()
-      await expect(page.getByRole('dialog').locator('li', { hasText: listItem })).toBeVisible()
+      const userDialog = page.getByRole('dialog')
+      const userAnnouncement = userDialog.locator('section', { hasText: title })
+      await expect(userAnnouncement).toBeVisible()
+      await expect(userAnnouncement.getByText('Pinned', { exact: true })).toBeVisible()
+      await expect(userAnnouncement.locator('li', { hasText: listItem })).toBeVisible()
 
       await page.keyboard.press('Escape')
       await expect(page.getByRole('dialog')).not.toBeVisible()
       await page.getByRole('button', { name: 'Notifications' }).click()
       await page.getByRole('button', { name: 'Site Announcements' }).click()
-      await expect(page.getByRole('dialog').getByText(title)).toBeVisible()
-      await expect(page.getByRole('dialog').locator('li', { hasText: listItem })).toBeVisible()
+      await expect(userAnnouncement).toBeVisible()
+      await expect(userAnnouncement.getByText('Pinned', { exact: true })).toBeVisible()
+      await expect(userAnnouncement.locator('li', { hasText: listItem })).toBeVisible()
     } finally {
       if (announcementId) {
         await signInAsAdmin(page)

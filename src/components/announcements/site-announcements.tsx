@@ -1,11 +1,13 @@
 import type { Announcement } from '@shared/types'
 import { useQuery } from '@tanstack/react-query'
-import { Megaphone } from 'lucide-react'
+import { Megaphone, Pin } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { listActiveAnnouncements } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { AnnouncementMarkdown } from './markdown-content'
 
 const activeAnnouncementsQueryKey = ['announcements', 'active'] as const
@@ -96,21 +98,43 @@ function AnnouncementPanel({
   expanded: boolean
   onToggle: () => void
 }) {
-  const { i18n } = useTranslation()
+  const { i18n, t } = useTranslation()
   const date = announcement.publishedAt ?? announcement.createdAt
+  const pinned = announcement.priority > 0
 
   return (
-    <section className="rounded-md border bg-card">
-      <Button variant="ghost" className="h-auto w-full justify-start rounded-md px-4 py-3 text-left" onClick={onToggle}>
+    <section
+      className={cn(
+        'overflow-hidden rounded-md border bg-card transition-colors',
+        pinned && 'border-primary/40 bg-primary/5 shadow-sm',
+      )}
+    >
+      <Button
+        variant="ghost"
+        className={cn(
+          'h-auto w-full justify-start rounded-none px-4 py-3 text-left hover:bg-muted/60',
+          pinned && 'hover:bg-primary/10',
+        )}
+        onClick={onToggle}
+      >
+        <span className={cn('mr-3 h-10 w-1 rounded-full bg-transparent', pinned && 'bg-primary')} aria-hidden="true" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium text-sm">{announcement.title}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-medium text-sm">{announcement.title}</span>
+            {pinned && (
+              <Badge variant="secondary" className="shrink-0 gap-1 border-primary/30 bg-background text-primary">
+                <Pin className="h-3 w-3" />
+                {t('announcement.pinned')}
+              </Badge>
+            )}
+          </span>
           <span className="mt-1 block text-xs text-muted-foreground">
             {new Date(date).toLocaleString(i18n.language)}
           </span>
         </span>
       </Button>
       {expanded && announcement.body && (
-        <div className="border-t px-4 py-3">
+        <div className={cn('border-t px-4 py-3', pinned && 'border-primary/20 bg-background/60')}>
           <AnnouncementMarkdown content={announcement.body} />
         </div>
       )}
