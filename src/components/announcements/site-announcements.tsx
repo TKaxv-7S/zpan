@@ -4,7 +4,7 @@ import { Megaphone } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { listActiveAnnouncements } from '@/lib/api'
 import { AnnouncementMarkdown } from './markdown-content'
 
@@ -70,6 +70,7 @@ export function SiteAnnouncements() {
             <Megaphone className="h-5 w-5" />
             {t('announcement.title')}
           </DialogTitle>
+          <DialogDescription className="sr-only">{t('announcement.description')}</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
           {announcements.map((announcement) => (

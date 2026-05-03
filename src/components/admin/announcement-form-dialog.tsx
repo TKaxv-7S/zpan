@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnnouncementMarkdown } from '@/components/announcements/markdown-content'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -72,6 +79,7 @@ export function AnnouncementFormDialog({
             <DialogTitle>
               {announcement ? t('admin.announcement.editTitle') : t('admin.announcement.createTitle')}
             </DialogTitle>
+            <DialogDescription className="sr-only">{t('admin.announcement.description')}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">

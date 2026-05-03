@@ -571,7 +571,7 @@
   "notification.hoursAgo": "{{count}}h ago",
   "notification.daysAgo": "{{count}}d ago",
   "announcement.title": "Site Announcements",
-  "announcement.description": "Read current and past announcements from the site administrator.",
+  "announcement.description": "Read current announcements from the site administrator.",
   "announcement.empty": "No announcements published yet",
   "announcement.viewAll": "View announcements",
   "announcement.status.draft": "Draft",

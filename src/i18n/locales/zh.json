@@ -571,7 +571,7 @@
   "notification.hoursAgo": "{{count}}小时前",
   "notification.daysAgo": "{{count}}天前",
   "announcement.title": "站点公告",
-  "announcement.description": "查看站点管理员发布的当前和历史公告。",
+  "announcement.description": "查看站点管理员发布的当前公告。",
   "announcement.empty": "暂无已发布公告",
   "announcement.viewAll": "查看公告",
   "announcement.status.draft": "草稿",
