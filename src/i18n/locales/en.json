@@ -206,8 +206,6 @@
   "admin.announcement.fieldPriority": "Priority",
   "admin.announcement.fieldPublishedAt": "Published At",
   "admin.announcement.fieldExpiresAt": "Expires At",
-  "admin.announcement.markdownPreview": "Markdown Preview",
-  "admin.announcement.emptyPreview": "Nothing to preview",
   "admin.users.resendInvite": "Resend Invite",
   "admin.users.revokeInvite": "Revoke Invite",
   "admin.users.inviteStatus.pending": "Pending",

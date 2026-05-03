@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AnnouncementMarkdown } from '@/components/announcements/markdown-content'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -13,8 +12,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import type { Announcement, AnnouncementInput } from '@/lib/api'
+
+const AnnouncementMarkdownEditor = lazy(() =>
+  import('./announcement-markdown-editor').then((module) => ({
+    default: module.AnnouncementMarkdownEditor,
+  })),
+)
 
 interface AnnouncementFormDialogProps {
   open: boolean
@@ -73,7 +77,7 @@ export function AnnouncementFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-4xl">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
             <DialogTitle>
@@ -89,24 +93,14 @@ export function AnnouncementFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="announcement-body">{t('admin.announcement.fieldBody')}</Label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Textarea
+            <Suspense fallback={<div className="h-[360px] rounded-md border bg-muted/20" />}>
+              <AnnouncementMarkdownEditor
                 id="announcement-body"
-                rows={10}
+                label={t('admin.announcement.fieldBody')}
                 value={body}
-                onChange={(event) => setBody(event.target.value)}
+                onChange={setBody}
               />
-              <div className="min-h-[240px] rounded-md border bg-muted/20 p-3">
-                <p className="mb-2 font-medium text-muted-foreground text-xs">
-                  {t('admin.announcement.markdownPreview')}
-                </p>
-                {body ? (
-                  <AnnouncementMarkdown content={body} />
-                ) : (
-                  <p className="text-muted-foreground text-sm">{t('admin.announcement.emptyPreview')}</p>
-                )}
-              </div>
-            </div>
+            </Suspense>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">

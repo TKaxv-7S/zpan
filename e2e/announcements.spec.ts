@@ -17,9 +17,9 @@ test.describe('Site announcements', () => {
       await page.getByRole('button', { name: 'New Announcement' }).click()
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
-      await dialog.getByLabel('Title').fill(title)
-      await dialog.getByLabel('Body').fill(body)
-      await dialog.getByLabel('Priority').fill('100')
+      await dialog.getByRole('textbox', { name: 'Title' }).fill(title)
+      await dialog.getByRole('textbox', { name: 'Body' }).fill(body)
+      await dialog.getByRole('spinbutton', { name: 'Priority' }).fill('100')
       await expect(dialog.locator('li', { hasText: listItem })).toBeVisible()
 
       const [createResp] = await Promise.all([
