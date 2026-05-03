@@ -72,11 +72,11 @@ export function AnnouncementFormDialog({
             <Input id="announcement-title" value={title} onChange={(event) => setTitle(event.target.value)} required />
           </div>
 
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
-            <Label htmlFor="announcement-pinned" className="cursor-pointer">
-              {t('admin.announcement.fieldPinned')}
-            </Label>
-            <Switch id="announcement-pinned" checked={pinned} onCheckedChange={setPinned} />
+          <div className="space-y-2">
+            <Label htmlFor="announcement-pinned">{t('admin.announcement.fieldPinned')}</Label>
+            <div className="flex h-9 items-center">
+              <Switch id="announcement-pinned" checked={pinned} onCheckedChange={setPinned} />
+            </div>
           </div>
 
           <div className="space-y-2">
