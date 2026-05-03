@@ -10,12 +10,14 @@ import {
   confirmUpload,
   connectCloud,
   copyObject,
+  createAnnouncement,
   createIhostApiKey,
   createIhostImagePresign,
   createObject,
   createShare,
   createSiteInvitation,
   createStorage,
+  deleteAnnouncement,
   deleteAvatar,
   deleteIhostConfig,
   deleteIhostImage,
@@ -27,6 +29,7 @@ import {
   disconnectCloud,
   emptyTrash,
   enableIhostFeature,
+  getAnnouncement,
   getBranding,
   getEmailConfig,
   getIhostConfig,
@@ -40,6 +43,9 @@ import {
   getSystemOption,
   getUnreadCount,
   getUserQuota,
+  listActiveAnnouncements,
+  listAdminAnnouncements,
+  listAnnouncements,
   listAuthProviders,
   listIhostApiKeys,
   listIhostImages,
@@ -67,6 +73,7 @@ import {
   setSystemOption,
   testEmail,
   trashObject,
+  updateAnnouncement,
   updateIhostConfig,
   updateObject,
   updateQuota,
@@ -1182,6 +1189,151 @@ describe('api', () => {
       vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'unauthorized' }, false, 401))
 
       await expect(markAllNotificationsRead()).rejects.toThrow('unauthorized')
+    })
+  })
+
+  describe('announcements api', () => {
+    const announcement = {
+      id: 'ann-1',
+      title: 'Maintenance',
+      body: 'Short outage',
+      status: 'published',
+      priority: 1,
+      publishedAt: '2026-05-01T00:00:00.000Z',
+      expiresAt: null,
+      createdBy: 'user-1',
+      createdAt: '2026-05-01T00:00:00.000Z',
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    }
+
+    const input = {
+      title: 'Maintenance',
+      body: 'Short outage',
+      status: 'published' as const,
+      priority: 1,
+      publishedAt: '2026-05-01T00:00:00.000Z',
+      expiresAt: null,
+    }
+
+    it('lists announcement history', async () => {
+      const payload = { items: [announcement], total: 1, page: 1, pageSize: 20 }
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(payload))
+
+      const result = await listAnnouncements()
+
+      expect(result).toEqual(payload)
+      const [url] = vi.mocked(fetch).mock.calls[0] as [string]
+      expect(url).toContain('/api/announcements')
+      expect(url).toContain('page=1')
+      expect(url).toContain('pageSize=20')
+    })
+
+    it('throws ApiError when announcement history fails', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'Cannot list announcements' }, false, 500))
+
+      await expect(listAnnouncements()).rejects.toThrow('Cannot list announcements')
+    })
+
+    it('lists active announcements with scope query', async () => {
+      const payload = { items: [announcement], total: 1, page: 1, pageSize: 20 }
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(payload))
+
+      await listActiveAnnouncements()
+
+      const [url] = vi.mocked(fetch).mock.calls[0] as [string]
+      expect(url).toContain('/api/announcements')
+      expect(url).toContain('scope=active')
+    })
+
+    it('throws ApiError when active announcements fail', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'Cannot list active announcements' }, false, 500))
+
+      await expect(listActiveAnnouncements()).rejects.toThrow('Cannot list active announcements')
+    })
+
+    it('lists admin announcements with status filter', async () => {
+      const payload = { items: [announcement], total: 1, page: 1, pageSize: 20 }
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(payload))
+
+      await listAdminAnnouncements(1, 20, 'published')
+
+      const [url] = vi.mocked(fetch).mock.calls[0] as [string]
+      expect(url).toContain('/api/admin/announcements')
+      expect(url).toContain('status=published')
+    })
+
+    it('throws ApiError when admin announcement list fails', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'Forbidden' }, false, 403))
+
+      await expect(listAdminAnnouncements()).rejects.toThrow('Forbidden')
+    })
+
+    it('creates an announcement', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(announcement))
+
+      const result = await createAnnouncement(input)
+
+      expect(result).toEqual(announcement)
+      const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/api/admin/announcements')
+      expect(init.method).toBe('POST')
+      expect(JSON.parse(init.body as string)).toEqual(input)
+    })
+
+    it('gets an announcement', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(announcement))
+
+      await getAnnouncement('ann-1')
+
+      const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/api/admin/announcements/ann-1')
+      expect(init.method).toBe('GET')
+    })
+
+    it('throws ApiError when getting an announcement fails', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'Announcement not found' }, false, 404))
+
+      await expect(getAnnouncement('missing')).rejects.toThrow('Announcement not found')
+    })
+
+    it('updates an announcement', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse(announcement))
+
+      await updateAnnouncement('ann-1', input)
+
+      const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/api/admin/announcements/ann-1')
+      expect(init.method).toBe('PUT')
+      expect(JSON.parse(init.body as string)).toEqual(input)
+    })
+
+    it('throws ApiError when updating an announcement fails', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'Invalid announcement' }, false, 400))
+
+      await expect(updateAnnouncement('ann-1', input)).rejects.toThrow('Invalid announcement')
+    })
+
+    it('deletes an announcement', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ id: 'ann-1', deleted: true }))
+
+      const result = await deleteAnnouncement('ann-1')
+
+      expect(result).toEqual({ id: 'ann-1', deleted: true })
+      const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('/api/admin/announcements/ann-1')
+      expect(init.method).toBe('DELETE')
+    })
+
+    it('throws ApiError when deleting an announcement fails', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'Announcement not found' }, false, 404))
+
+      await expect(deleteAnnouncement('missing')).rejects.toThrow('Announcement not found')
+    })
+
+    it('throws ApiError for failed create', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ error: 'Invalid announcement' }, false, 400))
+
+      await expect(createAnnouncement(input)).rejects.toThrow('Invalid announcement')
     })
   })
 

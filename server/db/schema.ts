@@ -138,6 +138,26 @@ export const notifications = sqliteTable(
   ],
 )
 
+export const announcements = sqliteTable(
+  'announcements',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    body: text('body').notNull().default(''),
+    status: text('status').notNull().default('draft'),
+    priority: integer('priority').notNull().default(0),
+    publishedAt: integer('published_at', { mode: 'timestamp' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }),
+    createdBy: text('created_by').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => [
+    index('announcements_status_priority_idx').on(t.status, t.priority),
+    index('announcements_published_idx').on(t.publishedAt),
+  ],
+)
+
 export const activityEvents = sqliteTable('activity_events', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull(),

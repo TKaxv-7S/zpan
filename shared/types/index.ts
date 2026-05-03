@@ -184,6 +184,21 @@ export interface Notification {
   createdAt: string
 }
 
+export type AnnouncementStatus = 'draft' | 'published' | 'archived'
+
+export interface Announcement {
+  id: string
+  title: string
+  body: string
+  status: AnnouncementStatus
+  priority: number
+  publishedAt: string | null
+  expiresAt: string | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ActivityEvent {
   id: string
   orgId: string

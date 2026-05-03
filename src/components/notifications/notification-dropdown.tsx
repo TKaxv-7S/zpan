@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { openAnnouncementsDialog } from '@/components/announcements/site-announcements'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { listNotifications, markAllNotificationsRead } from '@/lib/api'
@@ -44,6 +45,14 @@ export function NotificationDropdown() {
           items.map((item) => <NotificationItem key={item.id} notification={item} onRead={handleItemRead} />)
         )}
       </div>
+      <DropdownMenuSeparator className="m-0" />
+      <Button
+        variant="ghost"
+        className="h-10 w-full justify-start rounded-none px-4 text-sm"
+        onClick={openAnnouncementsDialog}
+      >
+        {t('announcement.title')}
+      </Button>
     </DropdownMenuContent>
   )
 }

@@ -1,6 +1,7 @@
 import type { OAuthProviderConfig } from '@shared/oauth-providers'
 import type {
   AllowedImageMime,
+  AnnouncementInput,
   ConflictStrategy,
   CreateShareRequest,
   CreateStorageInput,
@@ -8,6 +9,7 @@ import type {
 } from '@shared/schemas'
 import type {
   ActivityEvent,
+  Announcement,
   AuthProvider,
   BindingState,
   BrandingConfig,
@@ -23,9 +25,11 @@ import type {
   StorageObject,
 } from '@shared/types'
 import {
+  adminAnnouncementsApi,
   adminAuthProviders,
   adminQuotas,
   adminSiteInvitations,
+  announcementsApi,
   authedSharesApi,
   authProviders,
   brandingAdminApi,
@@ -440,6 +444,54 @@ export function markNotificationRead(id: string) {
 
 export function markAllNotificationsRead() {
   return unwrap<{ count: number }>(notificationsApi.index.$patch())
+}
+
+// Announcements API
+
+export type { Announcement, AnnouncementInput }
+
+export type AnnouncementListResult = {
+  items: Announcement[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export function listAnnouncements(page = 1, pageSize = 20) {
+  return unwrap<AnnouncementListResult>(
+    announcementsApi.index.$get({ query: { page: String(page), pageSize: String(pageSize) } }),
+  )
+}
+
+export function listActiveAnnouncements() {
+  return unwrap<AnnouncementListResult>(
+    announcementsApi.index.$get({ query: { scope: 'active', page: '1', pageSize: '20' } }),
+  )
+}
+
+export function listAdminAnnouncements(page = 1, pageSize = 20, status?: Announcement['status']) {
+  const query: { page: string; pageSize: string; status?: Announcement['status'] } = {
+    page: String(page),
+    pageSize: String(pageSize),
+  }
+  if (status) query.status = status
+  return unwrap<AnnouncementListResult>(adminAnnouncementsApi.index.$get({ query }))
+}
+
+export function createAnnouncement(data: AnnouncementInput) {
+  return unwrap<Announcement>(adminAnnouncementsApi.index.$post({ json: data }))
+}
+
+export function getAnnouncement(id: string) {
+  return unwrap<Announcement>(adminAnnouncementsApi[':id'].$get({ param: { id } }))
+}
+
+export function updateAnnouncement(id: string, data: AnnouncementInput) {
+  return unwrap<Announcement>(adminAnnouncementsApi[':id'].$put({ param: { id }, json: data }))
+}
+
+export function deleteAnnouncement(id: string) {
+  return unwrap<{ id: string; deleted: boolean }>(adminAnnouncementsApi[':id'].$delete({ param: { id } }))
 }
 
 // Shares API

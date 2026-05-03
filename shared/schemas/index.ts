@@ -1,5 +1,17 @@
 import { z } from 'zod'
 
+export type {
+  AnnouncementInput,
+  AnnouncementStatus,
+  ListAdminAnnouncementsQuery,
+  ListAnnouncementsQuery,
+} from './announcement'
+export {
+  announcementInputSchema,
+  announcementStatusSchema,
+  listAdminAnnouncementsQuerySchema,
+  listAnnouncementsQuerySchema,
+} from './announcement'
 export type { ListNotificationsQuery } from './notification'
 export { listNotificationsQuerySchema } from './notification'
 export type { CreateShareInput, CreateShareRequest, ShareKind } from './share'

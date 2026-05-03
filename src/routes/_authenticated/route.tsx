@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect, useMatchRoute } from '@tanstack/react-router'
+import { SiteAnnouncements } from '@/components/announcements/site-announcements'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { GlobalSearchBar } from '@/components/layout/global-search-bar'
 import { MusicPlayerButton } from '@/components/music/music-player-button'
@@ -39,6 +40,7 @@ function AuthenticatedLayout() {
           </div>
         </header>
         <div className="min-w-0 flex-1 bg-canvas p-4">
+          <SiteAnnouncements />
           <Outlet />
         </div>
       </SidebarInset>

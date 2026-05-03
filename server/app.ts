@@ -7,6 +7,7 @@ import { accessLog } from './middleware/logger'
 import type { Env } from './middleware/platform'
 import { platformMiddleware } from './middleware/platform'
 import type { Platform } from './platform/interface'
+import { adminAnnouncements, announcements } from './routes/announcements'
 import { adminAuthProviders, publicAuthProviders } from './routes/auth-providers'
 import { brandingAdmin, publicBranding } from './routes/branding'
 import emailConfig from './routes/email-config'
@@ -67,6 +68,7 @@ export function createApp(platform: Platform, auth: Auth) {
   app.use('/api/*', authMiddleware)
 
   app.route('/api/me', me)
+  app.route('/api/announcements', announcements)
 
   // Mount routes separately to avoid deep type chain accumulation.
   // Each .route() call is independent — TypeScript doesn't stack types.
@@ -89,6 +91,7 @@ export function createApp(platform: Platform, auth: Auth) {
   app.route('/api/ihost/config', ihostConfig)
   app.route('/api/licensing', licensingAdmin)
   app.route('/api/admin/branding', brandingAdmin)
+  app.route('/api/admin/announcements', adminAnnouncements)
 
   app.get('/api/health', (c) => c.json({ status: 'ok' }))
 
@@ -121,6 +124,8 @@ export type NotificationsRoute = typeof notifications
 export type IhostRoute = typeof ihost
 export type IhostConfigRoute = typeof ihostConfig
 export type MeRoute = typeof me
+export type AnnouncementsRoute = typeof announcements
+export type AdminAnnouncementsRoute = typeof adminAnnouncements
 export type LicensingRoute = typeof licensing
 export type LicensingAdminRoute = typeof licensingAdmin
 export type PublicBrandingRoute = typeof publicBranding

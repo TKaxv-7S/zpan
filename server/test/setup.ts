@@ -253,6 +253,20 @@ const APP_SCHEMA_SQL = `
   );
   CREATE INDEX IF NOT EXISTS notifications_user_created_idx ON notifications(user_id, created_at);
   CREATE INDEX IF NOT EXISTS notifications_user_read_idx ON notifications(user_id, read_at);
+  CREATE TABLE IF NOT EXISTS announcements (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'draft',
+    priority INTEGER NOT NULL DEFAULT 0,
+    published_at INTEGER,
+    expires_at INTEGER,
+    created_by TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS announcements_status_priority_idx ON announcements(status, priority);
+  CREATE INDEX IF NOT EXISTS announcements_published_idx ON announcements(published_at);
   CREATE TABLE IF NOT EXISTS apikey (
     id TEXT PRIMARY KEY,
     config_id TEXT NOT NULL DEFAULT 'default',

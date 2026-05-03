@@ -1,0 +1,163 @@
+import { describe, expect, it } from 'vitest'
+import { adminHeaders, authedHeaders, createTestApp } from '../test/setup.js'
+
+const publishedAnnouncement = {
+  title: 'Maintenance window',
+  body: 'Uploads will pause for ten minutes.',
+  status: 'published',
+  priority: 10,
+  publishedAt: new Date(Date.now() - 60_000).toISOString(),
+  expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+}
+
+async function createPublishedAnnouncement(app: Awaited<ReturnType<typeof createTestApp>>['app']) {
+  const headers = await adminHeaders(app)
+  const res = await app.request('/api/admin/announcements', {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(publishedAnnouncement),
+  })
+  return (await res.json()) as { id: string; title: string }
+}
+
+describe('Admin Announcements API', () => {
+  it('returns 401 without auth', async () => {
+    const { app } = await createTestApp()
+    const res = await app.request('/api/admin/announcements')
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 403 for non-admin users', async () => {
+    const { app } = await createTestApp()
+    await adminHeaders(app)
+    const headers = await authedHeaders(app, 'user@example.com')
+
+    const res = await app.request('/api/admin/announcements', { headers })
+    expect(res.status).toBe(403)
+  })
+
+  it('creates, lists, updates, and deletes an announcement', async () => {
+    const { app } = await createTestApp()
+    const headers = await adminHeaders(app)
+
+    const createRes = await app.request('/api/admin/announcements', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...publishedAnnouncement, status: 'draft', publishedAt: null }),
+    })
+    expect(createRes.status).toBe(201)
+    const created = (await createRes.json()) as { id: string; status: string }
+    expect(created.status).toBe('draft')
+
+    const updateRes = await app.request(`/api/admin/announcements/${created.id}`, {
+      method: 'PUT',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...publishedAnnouncement, title: 'Updated title' }),
+    })
+    expect(updateRes.status).toBe(200)
+    const updated = (await updateRes.json()) as { title: string; status: string }
+    expect(updated.title).toBe('Updated title')
+    expect(updated.status).toBe('published')
+
+    const listRes = await app.request('/api/admin/announcements?status=published', { headers })
+    expect(listRes.status).toBe(200)
+    const list = (await listRes.json()) as { items: Array<{ id: string }>; total: number }
+    expect(list.total).toBe(1)
+    expect(list.items[0].id).toBe(created.id)
+
+    const deleteRes = await app.request(`/api/admin/announcements/${created.id}`, { method: 'DELETE', headers })
+    expect(deleteRes.status).toBe(200)
+  })
+})
+
+describe('User Announcements API', () => {
+  it('returns 401 without auth', async () => {
+    const { app } = await createTestApp()
+    const res = await app.request('/api/announcements')
+    expect(res.status).toBe(401)
+  })
+
+  it('returns active announcements', async () => {
+    const { app } = await createTestApp()
+    const created = await createPublishedAnnouncement(app)
+    const headers = await authedHeaders(app, 'reader@example.com')
+
+    const activeRes = await app.request('/api/announcements?scope=active', { headers })
+    expect(activeRes.status).toBe(200)
+    const active = (await activeRes.json()) as { items: Array<{ id: string }>; total: number }
+    expect(active.total).toBe(1)
+    expect(active.items[0].id).toBe(created.id)
+  })
+
+  it('keeps archived announcements in history but not active list', async () => {
+    const { app } = await createTestApp()
+    const admin = await adminHeaders(app)
+    const createRes = await app.request('/api/admin/announcements', {
+      method: 'POST',
+      headers: { ...admin, 'Content-Type': 'application/json' },
+      body: JSON.stringify(publishedAnnouncement),
+    })
+    const created = (await createRes.json()) as { id: string; publishedAt: string }
+
+    const archiveRes = await app.request(`/api/admin/announcements/${created.id}`, {
+      method: 'PUT',
+      headers: { ...admin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...publishedAnnouncement, status: 'archived', publishedAt: created.publishedAt }),
+    })
+    expect(archiveRes.status).toBe(200)
+
+    const headers = await authedHeaders(app, 'reader@example.com')
+    const activeRes = await app.request('/api/announcements?scope=active', { headers })
+    const active = (await activeRes.json()) as { items: unknown[]; total: number }
+    expect(active.total).toBe(0)
+
+    const historyRes = await app.request('/api/announcements', { headers })
+    const history = (await historyRes.json()) as { items: Array<{ id: string; status: string }>; total: number }
+    expect(history.total).toBe(1)
+    expect(history.items[0]).toMatchObject({ id: created.id, status: 'archived' })
+  })
+
+  it('does not include draft announcements in history', async () => {
+    const { app } = await createTestApp()
+    const admin = await adminHeaders(app)
+    await app.request('/api/admin/announcements', {
+      method: 'POST',
+      headers: { ...admin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...publishedAnnouncement, status: 'draft', publishedAt: null }),
+    })
+    const headers = await authedHeaders(app, 'reader@example.com')
+
+    const res = await app.request('/api/announcements', { headers })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { items: unknown[]; total: number }
+    expect(body.total).toBe(0)
+  })
+
+  it('does not include scheduled announcements in history before publish time', async () => {
+    const { app } = await createTestApp()
+    const admin = await adminHeaders(app)
+    await app.request('/api/admin/announcements', {
+      method: 'POST',
+      headers: { ...admin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...publishedAnnouncement,
+        publishedAt: new Date(Date.now() + 86_400_000).toISOString(),
+      }),
+    })
+    const headers = await authedHeaders(app, 'reader@example.com')
+
+    const res = await app.request('/api/announcements', { headers })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { items: unknown[]; total: number }
+    expect(body.total).toBe(0)
+  })
+
+  it('rejects invalid pagination query values', async () => {
+    const { app } = await createTestApp()
+    await createPublishedAnnouncement(app)
+    const headers = await authedHeaders(app, 'reader@example.com')
+
+    const res = await app.request('/api/announcements?page=abc&pageSize=xyz', { headers })
+    expect(res.status).toBe(400)
+  })
+})
