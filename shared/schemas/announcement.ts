@@ -19,8 +19,6 @@ export const announcementInputSchema = z.object({
   body: z.string().max(5000).default(''),
   status: announcementStatusSchema,
   priority: z.number().int().min(0).max(100).default(0),
-  publishedAt: z.string().datetime().nullable().optional(),
-  expiresAt: z.string().datetime().nullable().optional(),
 })
 
 export type AnnouncementStatus = z.infer<typeof announcementStatusSchema>

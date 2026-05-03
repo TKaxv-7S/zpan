@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import type { Announcement, AnnouncementInput } from '@/lib/api'
 
 const AnnouncementMarkdownEditor = lazy(() =>
@@ -28,17 +28,6 @@ interface AnnouncementFormDialogProps {
   onSubmit: (input: AnnouncementInput) => void
 }
 
-function dateTimeInputValue(value: string | null) {
-  if (!value) return ''
-  const date = new Date(value)
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return localDate.toISOString().slice(0, 16)
-}
-
-function isoDateTime(value: string) {
-  return value ? new Date(value).toISOString() : null
-}
-
 export function AnnouncementFormDialog({
   open,
   announcement,
@@ -49,18 +38,12 @@ export function AnnouncementFormDialog({
   const { t } = useTranslation()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [status, setStatus] = useState<AnnouncementInput['status']>('draft')
-  const [priority, setPriority] = useState(0)
-  const [publishedAt, setPublishedAt] = useState('')
-  const [expiresAt, setExpiresAt] = useState('')
+  const [pinned, setPinned] = useState(false)
 
   useEffect(() => {
     setTitle(announcement?.title ?? '')
     setBody(announcement?.body ?? '')
-    setStatus(announcement?.status ?? 'draft')
-    setPriority(announcement?.priority ?? 0)
-    setPublishedAt(dateTimeInputValue(announcement?.publishedAt ?? null))
-    setExpiresAt(dateTimeInputValue(announcement?.expiresAt ?? null))
+    setPinned((announcement?.priority ?? 0) > 0)
   }, [announcement])
 
   function handleSubmit(event: React.FormEvent) {
@@ -68,10 +51,8 @@ export function AnnouncementFormDialog({
     onSubmit({
       title,
       body,
-      status,
-      priority,
-      publishedAt: isoDateTime(publishedAt),
-      expiresAt: isoDateTime(expiresAt),
+      status: announcement?.status ?? 'draft',
+      priority: pinned ? 100 : 0,
     })
   }
 
@@ -91,6 +72,13 @@ export function AnnouncementFormDialog({
             <Input id="announcement-title" value={title} onChange={(event) => setTitle(event.target.value)} required />
           </div>
 
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
+            <Label htmlFor="announcement-pinned" className="cursor-pointer">
+              {t('admin.announcement.fieldPinned')}
+            </Label>
+            <Switch id="announcement-pinned" checked={pinned} onCheckedChange={setPinned} />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="announcement-body">{t('admin.announcement.fieldBody')}</Label>
             <Suspense fallback={<div className="h-[360px] rounded-md border bg-muted/20" />}>
@@ -101,55 +89,6 @@ export function AnnouncementFormDialog({
                 onChange={setBody}
               />
             </Suspense>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>{t('admin.announcement.fieldStatus')}</Label>
-              <Select value={status} onValueChange={(value) => setStatus(value as AnnouncementInput['status'])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">{t('announcement.status.draft')}</SelectItem>
-                  <SelectItem value="published">{t('announcement.status.published')}</SelectItem>
-                  <SelectItem value="archived">{t('announcement.status.archived')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="announcement-priority">{t('admin.announcement.fieldPriority')}</Label>
-              <Input
-                id="announcement-priority"
-                type="number"
-                min={0}
-                max={100}
-                value={priority}
-                onChange={(event) => setPriority(Number(event.target.value))}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="announcement-published-at">{t('admin.announcement.fieldPublishedAt')}</Label>
-              <Input
-                id="announcement-published-at"
-                type="datetime-local"
-                value={publishedAt}
-                onChange={(event) => setPublishedAt(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="announcement-expires-at">{t('admin.announcement.fieldExpiresAt')}</Label>
-              <Input
-                id="announcement-expires-at"
-                type="datetime-local"
-                value={expiresAt}
-                onChange={(event) => setExpiresAt(event.target.value)}
-              />
-            </div>
           </div>
 
           <DialogFooter>

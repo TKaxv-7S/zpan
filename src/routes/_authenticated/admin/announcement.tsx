@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Archive, Megaphone, Pencil, Plus, Send, Trash2 } from 'lucide-react'
+import { Archive, Megaphone, Pencil, Pin, Plus, Send, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -23,9 +23,6 @@ function announcementInput(announcement: Announcement, status = announcement.sta
     body: announcement.body,
     status,
     priority: announcement.priority,
-    publishedAt:
-      status === 'published' ? (announcement.publishedAt ?? new Date().toISOString()) : announcement.publishedAt,
-    expiresAt: announcement.expiresAt,
   }
 }
 
@@ -197,7 +194,15 @@ function AnnouncementRow({
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30">
       <td className="max-w-80 px-4 py-3">
-        <p className="truncate font-medium">{announcement.title}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate font-medium">{announcement.title}</p>
+          {announcement.priority > 0 && (
+            <Badge variant="secondary" className="gap-1">
+              <Pin className="h-3 w-3" />
+              {t('announcement.pinned')}
+            </Badge>
+          )}
+        </div>
         {announcement.body && <p className="mt-1 line-clamp-1 text-muted-foreground">{announcement.body}</p>}
       </td>
       <td className="px-4 py-3">

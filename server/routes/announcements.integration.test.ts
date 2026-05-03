@@ -6,8 +6,6 @@ const publishedAnnouncement = {
   body: 'Uploads will pause for ten minutes.',
   status: 'published',
   priority: 10,
-  publishedAt: new Date(Date.now() - 60_000).toISOString(),
-  expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
 }
 
 async function createPublishedAnnouncement(app: Awaited<ReturnType<typeof createTestApp>>['app']) {
@@ -43,7 +41,7 @@ describe('Admin Announcements API', () => {
     const createRes = await app.request('/api/admin/announcements', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...publishedAnnouncement, status: 'draft', publishedAt: null }),
+      body: JSON.stringify({ ...publishedAnnouncement, status: 'draft' }),
     })
     expect(createRes.status).toBe(201)
     const created = (await createRes.json()) as { id: string; status: string }
@@ -97,12 +95,12 @@ describe('User Announcements API', () => {
       headers: { ...admin, 'Content-Type': 'application/json' },
       body: JSON.stringify(publishedAnnouncement),
     })
-    const created = (await createRes.json()) as { id: string; publishedAt: string }
+    const created = (await createRes.json()) as { id: string }
 
     const archiveRes = await app.request(`/api/admin/announcements/${created.id}`, {
       method: 'PUT',
       headers: { ...admin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...publishedAnnouncement, status: 'archived', publishedAt: created.publishedAt }),
+      body: JSON.stringify({ ...publishedAnnouncement, status: 'archived' }),
     })
     expect(archiveRes.status).toBe(200)
 
@@ -123,26 +121,7 @@ describe('User Announcements API', () => {
     await app.request('/api/admin/announcements', {
       method: 'POST',
       headers: { ...admin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...publishedAnnouncement, status: 'draft', publishedAt: null }),
-    })
-    const headers = await authedHeaders(app, 'reader@example.com')
-
-    const res = await app.request('/api/announcements', { headers })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { items: unknown[]; total: number }
-    expect(body.total).toBe(0)
-  })
-
-  it('does not include scheduled announcements in history before publish time', async () => {
-    const { app } = await createTestApp()
-    const admin = await adminHeaders(app)
-    await app.request('/api/admin/announcements', {
-      method: 'POST',
-      headers: { ...admin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...publishedAnnouncement,
-        publishedAt: new Date(Date.now() + 86_400_000).toISOString(),
-      }),
+      body: JSON.stringify({ ...publishedAnnouncement, status: 'draft' }),
     })
     const headers = await authedHeaders(app, 'reader@example.com')
 

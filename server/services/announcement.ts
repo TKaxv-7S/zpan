@@ -1,5 +1,5 @@
 import type { AnnouncementInput, AnnouncementStatus } from '@shared/schemas'
-import { and, count, desc, eq, gt, isNull, lte, ne, or } from 'drizzle-orm'
+import { count, desc, eq, ne } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
 import { announcements } from '../db/schema'
 import type { Database } from '../platform/interface'
@@ -20,16 +20,9 @@ function pageParams(page: number, pageSize: number) {
   }
 }
 
-function parseDate(value: string | null | undefined): Date | null {
-  if (value === undefined || value === null) return null
-  return new Date(value)
-}
-
 function publishedAtFor(input: AnnouncementInput, existing?: Announcement): Date | null {
-  const publishedAt = parseDate(input.publishedAt)
-  if (input.status === 'archived') return publishedAt ?? existing?.publishedAt ?? null
+  if (input.status === 'archived') return existing?.publishedAt ?? null
   if (input.status !== 'published') return null
-  if (publishedAt) return publishedAt
   return existing?.publishedAt ?? new Date()
 }
 
@@ -46,7 +39,6 @@ export async function createAnnouncement(
     status: input.status,
     priority: input.priority,
     publishedAt: publishedAtFor(input),
-    expiresAt: parseDate(input.expiresAt),
     createdBy,
     createdAt: now,
     updatedAt: now,
@@ -64,7 +56,13 @@ export async function listAdminAnnouncements(
   const where = opts.status ? eq(announcements.status, opts.status) : undefined
 
   const [items, totalRows] = await Promise.all([
-    db.select().from(announcements).where(where).orderBy(desc(announcements.createdAt)).limit(limit).offset(offset),
+    db
+      .select()
+      .from(announcements)
+      .where(where)
+      .orderBy(desc(announcements.priority), desc(announcements.createdAt))
+      .limit(limit)
+      .offset(offset),
     db.select({ count: count() }).from(announcements).where(where),
   ])
 
@@ -92,7 +90,6 @@ export async function updateAnnouncement(
       status: input.status,
       priority: input.priority,
       publishedAt: publishedAtFor(input, existing),
-      expiresAt: parseDate(input.expiresAt),
       updatedAt: new Date(),
     })
     .where(eq(announcements.id, id))
@@ -112,22 +109,15 @@ export async function listUserAnnouncements(
   db: Database,
   opts: { activeOnly: boolean; page: number; pageSize: number },
 ): Promise<ListAnnouncementsResult> {
-  const now = new Date()
   const { limit, offset } = pageParams(opts.page, opts.pageSize)
-  const baseCondition = opts.activeOnly
-    ? and(
-        eq(announcements.status, 'published'),
-        lte(announcements.publishedAt, now),
-        or(isNull(announcements.expiresAt), gt(announcements.expiresAt, now)),
-      )
-    : and(ne(announcements.status, 'draft'), lte(announcements.publishedAt, now))
+  const baseCondition = opts.activeOnly ? eq(announcements.status, 'published') : ne(announcements.status, 'draft')
 
   const [items, totalRows] = await Promise.all([
     db
       .select()
       .from(announcements)
       .where(baseCondition)
-      .orderBy(desc(announcements.priority), desc(announcements.publishedAt))
+      .orderBy(desc(announcements.priority), desc(announcements.publishedAt), desc(announcements.updatedAt))
       .limit(limit)
       .offset(offset),
     db.select({ count: count() }).from(announcements).where(baseCondition),

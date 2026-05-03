@@ -193,7 +193,6 @@ export interface Announcement {
   status: AnnouncementStatus
   priority: number
   publishedAt: string | null
-  expiresAt: string | null
   createdBy: string
   createdAt: string
   updatedAt: string

@@ -19,7 +19,7 @@ test.describe('Site announcements', () => {
       await expect(dialog).toBeVisible()
       await dialog.getByRole('textbox', { name: 'Title' }).fill(title)
       await dialog.getByRole('textbox', { name: 'Body' }).fill(body)
-      await dialog.getByRole('spinbutton', { name: 'Priority' }).fill('100')
+      await dialog.getByRole('switch', { name: 'Pin announcement' }).click()
       await expect(dialog.locator('li', { hasText: listItem })).toBeVisible()
 
       const [createResp] = await Promise.all([

@@ -147,7 +147,6 @@ export const announcements = sqliteTable(
     status: text('status').notNull().default('draft'),
     priority: integer('priority').notNull().default(0),
     publishedAt: integer('published_at', { mode: 'timestamp' }),
-    expiresAt: integer('expires_at', { mode: 'timestamp' }),
     createdBy: text('created_by').notNull(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),

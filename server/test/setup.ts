@@ -260,7 +260,6 @@ const APP_SCHEMA_SQL = `
     status TEXT NOT NULL DEFAULT 'draft',
     priority INTEGER NOT NULL DEFAULT 0,
     published_at INTEGER,
-    expires_at INTEGER,
     created_by TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL

@@ -1200,7 +1200,6 @@ describe('api', () => {
       status: 'published',
       priority: 1,
       publishedAt: '2026-05-01T00:00:00.000Z',
-      expiresAt: null,
       createdBy: 'user-1',
       createdAt: '2026-05-01T00:00:00.000Z',
       updatedAt: '2026-05-01T00:00:00.000Z',
@@ -1211,8 +1210,6 @@ describe('api', () => {
       body: 'Short outage',
       status: 'published' as const,
       priority: 1,
-      publishedAt: '2026-05-01T00:00:00.000Z',
-      expiresAt: null,
     }
 
     it('lists announcement history', async () => {
