@@ -1,10 +1,15 @@
-import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_NAME, SignupMode } from '@shared/constants'
+import { DEFAULT_ORG_QUOTA, DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_NAME, SignupMode } from '@shared/constants'
 import { useQuery } from '@tanstack/react-query'
 import { listSystemOptions, type SiteOption } from '@/lib/api'
 
 export type { SiteOption }
 
 export const siteOptionsQueryKey = ['system', 'options'] as const
+
+export function resolveDefaultOrgQuotaValue(raw: string | undefined): number {
+  const quota = Number(raw)
+  return Number.isFinite(quota) && quota > 0 ? quota : DEFAULT_ORG_QUOTA
+}
 
 export function useSiteOptions() {
   const { data, isLoading, isError } = useQuery({
@@ -19,7 +24,7 @@ export function useSiteOptions() {
   return {
     siteName: optionMap.get('site_name') ?? DEFAULT_SITE_NAME,
     siteDescription: optionMap.get('site_description') ?? DEFAULT_SITE_DESCRIPTION,
-    defaultOrgQuota: Number(optionMap.get('default_org_quota') ?? '0'),
+    defaultOrgQuota: resolveDefaultOrgQuotaValue(optionMap.get('default_org_quota')),
     authSignupMode: (optionMap.get('auth_signup_mode') as SignupMode) ?? SignupMode.OPEN,
     isLoading,
     isError,
