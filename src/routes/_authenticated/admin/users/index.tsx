@@ -10,6 +10,7 @@ import { UserQuotaDialog } from '@/components/admin/user-quota-dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   batchDeleteUsers,
   batchUpdateUserQuota,
@@ -30,12 +31,15 @@ interface UserRow extends UserWithOrg {
   quotaTotal: number
 }
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100]
+const DEFAULT_PAGE_SIZE = 20
+
 function UsersPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   const [quotaDialogUser, setQuotaDialogUser] = useState<UserRow | null>(null)
   const [batchQuotaOpen, setBatchQuotaOpen] = useState(false)
@@ -136,6 +140,12 @@ function UsersPage() {
 
   function goToPage(nextPage: number) {
     setPage(nextPage)
+    setSelectedIds([])
+  }
+
+  function handlePageSizeChange(value: string) {
+    setPageSize(Number(value))
+    setPage(1)
     setSelectedIds([])
   }
 
@@ -268,19 +278,37 @@ function UsersPage() {
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
-            {t('admin.users.prevPage')}
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {t('admin.users.pageInfo', { page, total: totalPages })}
-          </span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
-            {t('admin.users.nextPage')}
-          </Button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>{t('admin.users.pageSize')}</span>
+          <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+            <SelectTrigger className="h-8 w-32" aria-label={t('admin.users.pageSize')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <SelectItem key={option} value={String(option)}>
+                  {t('admin.users.pageSizeOption', { count: option })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+              {t('admin.users.prevPage')}
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {t('admin.users.pageInfo', { page, total: totalPages })}
+            </span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+              {t('admin.users.nextPage')}
+            </Button>
+          </div>
+        )}
+      </div>
 
       <UserQuotaDialog
         open={quotaDialogUser !== null}

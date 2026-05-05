@@ -276,12 +276,13 @@ function BrandingForm({ initial, disabled }: { initial: BrandingConfig; disabled
               />
             </div>
           )}
+          <div className="flex justify-end pt-2">
+            <Button onClick={() => saveMutation.mutate()} disabled={disabled || saveMutation.isPending}>
+              {saveMutation.isPending ? t('admin.settings.branding.saving') : t('admin.settings.branding.save')}
+            </Button>
+          </div>
         </CardContent>
       </Card>
-
-      <Button onClick={() => saveMutation.mutate()} disabled={disabled || saveMutation.isPending}>
-        {saveMutation.isPending ? t('admin.settings.branding.saving') : t('admin.settings.branding.save')}
-      </Button>
     </div>
   )
 }

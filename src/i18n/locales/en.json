@@ -177,6 +177,8 @@
   "admin.users.prevPage": "Previous",
   "admin.users.nextPage": "Next",
   "admin.users.pageInfo": "Page {{page}} of {{total}}",
+  "admin.users.pageSize": "Rows per page",
+  "admin.users.pageSizeOption": "{{count}} / page",
   "admin.users.roleAdmin": "Admin",
   "admin.users.roleMember": "Member",
   "admin.users.inviteUser": "Invite User",

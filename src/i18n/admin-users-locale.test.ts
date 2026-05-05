@@ -47,6 +47,8 @@ const ADMIN_USERS_KEYS = [
   'admin.users.prevPage',
   'admin.users.nextPage',
   'admin.users.pageInfo',
+  'admin.users.pageSize',
+  'admin.users.pageSizeOption',
   'admin.users.roleAdmin',
   'admin.users.roleMember',
   'admin.users.inviteUser',
@@ -87,6 +89,7 @@ const INTERPOLATED_KEYS: Record<string, string[]> = {
   'admin.users.batchQuotaUpdated': ['{{count}}'],
   'admin.users.deleteConfirm': ['{{name}}'],
   'admin.users.pageInfo': ['{{page}}', '{{total}}'],
+  'admin.users.pageSizeOption': ['{{count}}'],
   'admin.users.inviteDialogDescription': ['{{count}}'],
 }
 
