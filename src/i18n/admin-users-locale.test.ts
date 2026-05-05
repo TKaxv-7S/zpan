@@ -23,6 +23,7 @@ const ADMIN_USERS_KEYS = [
   'admin.users.setQuota',
   'admin.users.setQuotaFor',
   'admin.users.quotaLabel',
+  'admin.users.quotaUnit',
   'admin.users.currentUsage',
   'admin.users.quotaUpdated',
   'admin.users.positiveQuotaRequired',
@@ -188,8 +189,8 @@ describe('admin.users locale keys — English values contract', () => {
     expect(enLocale['admin.users.searchPlaceholder']).toBe('Search by name, username, or email')
   })
 
-  it('admin.users.quotaLabel is "Quota (GB)"', () => {
-    expect(enLocale['admin.users.quotaLabel']).toBe('Quota (GB)')
+  it('admin.users.quotaLabel is "Quota"', () => {
+    expect(enLocale['admin.users.quotaLabel']).toBe('Quota')
   })
 })
 
@@ -245,7 +246,7 @@ describe('admin.users locale keys — i18n runtime translation', () => {
   it('interpolates admin.users.currentUsage with used value in English', async () => {
     const { default: i18n } = await import('./index')
     await i18n.changeLanguage('en')
-    expect(i18n.t('admin.users.currentUsage', { used: '2.50' })).toBe('Current usage: 2.50 GB')
+    expect(i18n.t('admin.users.currentUsage', { used: '2.50 GB' })).toBe('Current usage: 2.50 GB')
   })
 
   it('interpolates admin.users.deleteConfirm with name in English', async () => {

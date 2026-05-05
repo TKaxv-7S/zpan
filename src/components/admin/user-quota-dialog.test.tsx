@@ -51,6 +51,28 @@ vi.mock('@/components/ui/label', () => ({
   ),
 }))
 
+vi.mock('@/components/ui/select', () => ({
+  Select: ({
+    children,
+    value,
+    onValueChange,
+  }: {
+    children: React.ReactNode
+    value: string
+    onValueChange: (value: string) => void
+  }) => (
+    <select aria-label="admin.users.quotaUnit" value={value} onChange={(e) => onValueChange(e.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
+    <option value={value}>{children}</option>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+}))
+
 const user = {
   name: 'Test User',
   orgId: 'org-1',
@@ -103,5 +125,16 @@ describe('UserQuotaDialog', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(4 * 1024 * 1024 * 1024))
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('saves quota using the selected unit', async () => {
+    const onSave = vi.fn().mockResolvedValue({ orgId: user.orgId, quota: 512 * 1024 * 1024 })
+    const view = renderDialog({ onSave })
+
+    fireEvent.change(view.getByLabelText('admin.users.quotaUnit'), { target: { value: 'MB' } })
+    fireEvent.change(view.getByLabelText('admin.users.quotaLabel'), { target: { value: '512' } })
+    fireEvent.submit(view.getByRole('button', { name: 'common.save' }).closest('form')!)
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(512 * 1024 * 1024))
   })
 })
