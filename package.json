@@ -92,7 +92,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
     "@cloudflare/vite-plugin": "^1.35.0",
-    "@cloudflare/vitest-pool-workers": "^0.14.0",
+    "@cloudflare/vitest-pool-workers": "^0.15.2",
     "@cloudflare/workers-types": "^4.20260505.1",
     "@hono/vite-dev-server": "^0.25.1",
     "@playwright/test": "^1.59.1",
