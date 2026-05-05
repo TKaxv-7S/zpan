@@ -9,11 +9,14 @@ export interface UserWithOrg {
   name: string
   username: string
   email: string
+  image: string | null
   role: string | null
   banned: boolean | null
   createdAt: Date
   orgId: string | null
   orgName: string | null
+  quotaUsed: number
+  quotaTotal: number
 }
 
 export interface UserOperationFailure {
@@ -48,28 +51,26 @@ export async function listUsers(
       name: user.name,
       username: user.username,
       email: user.email,
+      image: user.image,
       role: user.role,
       banned: user.banned,
       createdAt: user.createdAt,
       orgId: organization.id,
       orgName: organization.name,
+      quotaUsed: orgQuotas.used,
+      quotaTotal: orgQuotas.quota,
     })
     .from(user)
-    .leftJoin(member, eq(member.userId, user.id))
-    .leftJoin(
-      organization,
-      and(eq(organization.id, member.organizationId), eq(organization.slug, sql`'personal-' || ${user.id}`)),
-    )
+    .leftJoin(organization, eq(organization.slug, sql`'personal-' || ${user.id}`))
+    .leftJoin(orgQuotas, eq(orgQuotas.orgId, organization.id))
 
-  const rows = await (filter ? query.where(filter) : query)
-    .groupBy(user.id)
-    .orderBy(desc(user.createdAt))
-    .limit(pageSize)
-    .offset(offset)
+  const rows = await (filter ? query.where(filter) : query).orderBy(desc(user.createdAt)).limit(pageSize).offset(offset)
 
   const items: UserWithOrg[] = rows.map((row) => ({
     ...row,
     username: row.username ?? '',
+    quotaUsed: row.quotaUsed ?? 0,
+    quotaTotal: row.quotaTotal ?? 0,
   }))
 
   return { items, total }

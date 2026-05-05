@@ -214,11 +214,14 @@ export interface UserWithOrg {
   name: string
   username: string
   email: string
+  image: string | null
   role: string | null
   banned: boolean
   createdAt: number
   orgId: string | null
   orgName: string | null
+  quotaUsed: number
+  quotaTotal: number
 }
 
 export function listUsers(page: number, pageSize: number, search?: string) {

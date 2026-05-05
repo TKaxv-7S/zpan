@@ -6,18 +6,17 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DeleteUserDialog } from '@/components/admin/delete-user-dialog'
 import { UserQuotaDialog } from '@/components/admin/user-quota-dialog'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { listQuotas, listUsers, type QuotaItem, type UserWithOrg, updateUserStatus } from '@/lib/api'
+import { listUsers, type UserWithOrg, updateUserStatus } from '@/lib/api'
+import { formatSize } from '@/lib/format'
 
 export const Route = createFileRoute('/_authenticated/users/')({
   component: UsersPage,
 })
 
-interface UserRow extends UserWithOrg {
-  quotaUsed: number
-  quotaTotal: number
-}
+type UserRow = UserWithOrg
 
 function UsersPage() {
   const { t } = useTranslation()
@@ -34,11 +33,6 @@ function UsersPage() {
     queryFn: () => listUsers(page, pageSize),
   })
 
-  const quotasQuery = useQuery({
-    queryKey: ['admin', 'quotas'],
-    queryFn: listQuotas,
-  })
-
   const toggleStatusMutation = useMutation({
     mutationFn: ({ userId, status }: { userId: string; status: 'active' | 'disabled' }) =>
       updateUserStatus(userId, status),
@@ -51,21 +45,9 @@ function UsersPage() {
     },
   })
 
-  const quotaMap = useMemo(() => {
-    const map = new Map<string, QuotaItem>()
-    for (const q of quotasQuery.data?.items ?? []) {
-      map.set(q.orgId, q)
-    }
-    return map
-  }, [quotasQuery.data])
-
   const users: UserRow[] = useMemo(() => {
-    const items = usersQuery.data?.items ?? []
-    return items.map((u) => {
-      const quota = u.orgId ? quotaMap.get(u.orgId) : undefined
-      return { ...u, quotaUsed: quota?.used ?? 0, quotaTotal: quota?.quota ?? 0 }
-    })
-  }, [usersQuery.data, quotaMap])
+    return usersQuery.data?.items ?? []
+  }, [usersQuery.data])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return users
@@ -75,7 +57,7 @@ function UsersPage() {
 
   const total = usersQuery.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const isLoading = usersQuery.isLoading || quotasQuery.isLoading
+  const isLoading = usersQuery.isLoading
 
   function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
     setSearch(e.target.value)
@@ -208,7 +190,15 @@ function UserTableRow({
 
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30">
-      <td className="px-4 py-3 font-medium">{user.name}</td>
+      <td className="px-4 py-3 font-medium">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8 shrink-0">
+            {user.image && <AvatarImage src={user.image} alt={user.name || user.username} />}
+            <AvatarFallback className="text-xs">{getInitials(user.name || user.username || user.email)}</AvatarFallback>
+          </Avatar>
+          <span>{user.name || user.username}</span>
+        </div>
+      </td>
       <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
       <td className="px-4 py-3">
         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadge}`}>{roleLabel}</span>
@@ -249,16 +239,21 @@ function UserTableRow({
   )
 }
 
-const BYTES_PER_GB = 1024 * 1024 * 1024
-
 function formatQuota(used: number, total: number): string {
-  const usedGB = (used / BYTES_PER_GB).toFixed(1)
-  if (total <= 0) return `${usedGB} GB / --`
-  const totalGB = (total / BYTES_PER_GB).toFixed(1)
-  return `${usedGB} / ${totalGB} GB`
+  if (total <= 0) return `${formatSize(used)} / --`
+  return `${formatSize(used)} / ${formatSize(total)}`
 }
 
 function formatDate(timestamp: number): string {
   const d = new Date(timestamp)
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('')
 }

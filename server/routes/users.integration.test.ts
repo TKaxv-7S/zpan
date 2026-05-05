@@ -59,6 +59,37 @@ describe('Admin Users API', () => {
     expect(body.items[0].orgName).toBeTruthy()
   })
 
+  it('GET /api/admin/users returns quota from the personal organization', async () => {
+    const { app, db } = await createTestApp()
+    const headers = await adminHeaders(app)
+    await signUpUser(app, 'quota-list@example.com')
+    const users = await db.all<{ id: string }>(sql`SELECT id FROM user WHERE email = 'quota-list@example.com'`)
+    const userId = users[0].id
+    const personalOrgs = await db.all<{ id: string }>(
+      sql`SELECT id FROM organization WHERE slug = ${`personal-${userId}`}`,
+    )
+
+    await db.run(sql`UPDATE org_quotas SET quota = 123456, used = 789 WHERE org_id = ${personalOrgs[0].id}`)
+    await db.run(
+      sql`INSERT INTO organization (id, name, slug, metadata) VALUES ('team-org', 'Team Org', 'team-org', '{}')`,
+    )
+    await db.run(
+      sql`INSERT INTO member (id, organization_id, user_id, role) VALUES ('team-member', 'team-org', ${userId}, 'member')`,
+    )
+
+    const res = await app.request('/api/admin/users?search=quota-list@example.com', { headers })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { items: Array<Record<string, unknown>>; total: number }
+
+    expect(body.total).toBe(1)
+    expect(body.items[0]).toMatchObject({
+      email: 'quota-list@example.com',
+      orgId: personalOrgs[0].id,
+      quotaUsed: 789,
+      quotaTotal: 123456,
+    })
+  })
+
   it('GET /api/admin/users filters by name, username, or email with filtered totals', async () => {
     const { app } = await createTestApp()
     const headers = await adminHeaders(app)
