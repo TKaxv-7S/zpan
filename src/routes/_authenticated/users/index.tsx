@@ -87,17 +87,17 @@ function UsersPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-sm">
+      <div className="overflow-hidden rounded-md border">
+        <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              <th className="px-4 py-3 text-left font-medium">{t('admin.users.colName')}</th>
-              <th className="px-4 py-3 text-left font-medium">{t('admin.users.colEmail')}</th>
-              <th className="px-4 py-3 text-left font-medium">{t('admin.users.colRole')}</th>
-              <th className="px-4 py-3 text-left font-medium">{t('admin.users.colStatus')}</th>
-              <th className="px-4 py-3 text-left font-medium">{t('admin.users.colQuota')}</th>
-              <th className="px-4 py-3 text-left font-medium">{t('admin.users.colCreatedAt')}</th>
-              <th className="px-4 py-3 text-right font-medium">{t('admin.users.colActions')}</th>
+              <th className="w-[23%] px-4 py-3 text-left font-medium">{t('admin.users.colName')}</th>
+              <th className="w-[25%] px-4 py-3 text-left font-medium">{t('admin.users.colEmail')}</th>
+              <th className="w-[9%] px-4 py-3 text-left font-medium">{t('admin.users.colRole')}</th>
+              <th className="w-[10%] px-4 py-3 text-left font-medium">{t('admin.users.colStatus')}</th>
+              <th className="w-[14%] px-4 py-3 text-left font-medium">{t('admin.users.colQuota')}</th>
+              <th className="w-[11%] truncate px-4 py-3 text-left font-medium">{t('admin.users.colCreatedAt')}</th>
+              <th className="w-[8%] px-4 py-3 text-right font-medium">{t('admin.users.colActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -191,26 +191,32 @@ function UserTableRow({
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30">
       <td className="px-4 py-3 font-medium">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8 shrink-0">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar className="h-7 w-7 shrink-0">
             {user.image && <AvatarImage src={user.image} alt={user.name || user.username} />}
             <AvatarFallback className="text-xs">{getInitials(user.name || user.username || user.email)}</AvatarFallback>
           </Avatar>
-          <span>{user.name || user.username}</span>
+          <span className="min-w-0 truncate" title={user.name || user.username}>
+            {user.name || user.username}
+          </span>
         </div>
       </td>
-      <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
-      <td className="px-4 py-3">
+      <td className="truncate px-4 py-3 text-muted-foreground" title={user.email}>
+        {user.email}
+      </td>
+      <td className="whitespace-nowrap px-4 py-3">
         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadge}`}>{roleLabel}</span>
       </td>
-      <td className="px-4 py-3">
+      <td className="whitespace-nowrap px-4 py-3">
         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge}`}>
           {user.banned ? t('admin.users.disabled') : t('admin.users.active')}
         </span>
       </td>
-      <td className="px-4 py-3 text-muted-foreground">{quotaLabel}</td>
-      <td className="px-4 py-3 text-muted-foreground">{formatDate(user.createdAt)}</td>
-      <td className="px-4 py-3">
+      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{quotaLabel}</td>
+      <td className="truncate px-4 py-3 text-muted-foreground" title={formatDate(user.createdAt)}>
+        {formatDate(user.createdAt)}
+      </td>
+      <td className="whitespace-nowrap px-4 py-3">
         <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"
