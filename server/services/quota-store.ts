@@ -11,7 +11,9 @@ const SETTINGS_ID = 'default'
 
 export async function getQuotaStoreSettings(db: Database): Promise<QuotaStoreSettings | null> {
   const settings = await getRawSettings(db)
-  return settings ? settingsDto(settings) : null
+  if (!settings) return null
+  const binding = await loadActiveLicenseBinding(db)
+  return settingsDto(settings, Boolean(binding?.refreshToken && binding.storeKey))
 }
 
 export async function upsertQuotaStoreSettings(
@@ -22,18 +24,11 @@ export async function upsertQuotaStoreSettings(
   const existing = await getQuotaStoreSettings(db)
   const values = {
     enabled: input.enabled,
-    cloudBaseUrl: input.cloudBaseUrl,
-    publicInstanceUrl: input.publicInstanceUrl,
-    webhookSigningSecret: input.webhookSigningSecret ?? '',
     updatedAt: now,
   }
 
   if (existing) {
-    const secret = input.webhookSigningSecret ?? (await getRawSettings(db))!.webhookSigningSecret
-    await db
-      .update(quotaStoreSettings)
-      .set({ ...values, webhookSigningSecret: secret })
-      .where(eq(quotaStoreSettings.id, SETTINGS_ID))
+    await db.update(quotaStoreSettings).set(values).where(eq(quotaStoreSettings.id, SETTINGS_ID))
   } else {
     await db.insert(quotaStoreSettings).values({ id: SETTINGS_ID, ...values, createdAt: now })
   }
@@ -158,10 +153,12 @@ export async function listGrantsForUser(db: Database, userId: string): Promise<Q
   return rows.map(grantDto)
 }
 
-export async function getCloudStoreBinding(db: Database): Promise<{ boundLicenseId: string; sharedSecret: string }> {
-  const [settings, binding] = await Promise.all([getRequiredSettings(db), loadActiveLicenseBinding(db)])
-  if (!binding) throw new Error('quota_store_binding_missing')
-  return { boundLicenseId: binding.cloudBindingId, sharedSecret: settings.webhookSigningSecret }
+export async function getCloudStoreBinding(
+  db: Database,
+): Promise<{ boundLicenseId: string; refreshToken: string; storeKey: string }> {
+  const binding = await loadActiveLicenseBinding(db)
+  if (!binding?.refreshToken || !binding.storeKey) throw new Error('quota_store_binding_missing')
+  return { boundLicenseId: binding.cloudBindingId, refreshToken: binding.refreshToken, storeKey: binding.storeKey }
 }
 
 export async function getUserTerminalLabel(db: Database, userId: string): Promise<string | null> {
@@ -214,7 +211,6 @@ export async function processCloudDelivery(
 export async function getRequiredSettings(db: Database) {
   const settings = await getRawSettings(db)
   if (!settings?.enabled) throw new Error('quota_store_disabled')
-  if (!settings.webhookSigningSecret) throw new Error('quota_store_webhook_secret_missing')
   return settings
 }
 
@@ -325,13 +321,11 @@ async function markDeliveryEvent(db: Database, id: string, status: string, error
     .where(eq(quotaDeliveryEvents.id, id))
 }
 
-function settingsDto(row: typeof quotaStoreSettings.$inferSelect): QuotaStoreSettings {
+function settingsDto(row: typeof quotaStoreSettings.$inferSelect, cloudReady = true): QuotaStoreSettings {
   return {
     id: row.id,
     enabled: row.enabled,
-    cloudBaseUrl: row.cloudBaseUrl,
-    publicInstanceUrl: row.publicInstanceUrl,
-    webhookSigningSecretSet: row.webhookSigningSecret.length > 0,
+    status: row.enabled ? (cloudReady ? 'ready' : 'cloud_unbound') : 'store_disabled',
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

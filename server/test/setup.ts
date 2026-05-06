@@ -137,9 +137,6 @@ const APP_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS quota_store_settings (
     id TEXT PRIMARY KEY,
     enabled INTEGER NOT NULL DEFAULT 0,
-    cloud_base_url TEXT NOT NULL,
-    public_instance_url TEXT NOT NULL,
-    webhook_signing_secret TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -363,6 +360,7 @@ const APP_SCHEMA_SQL = `
     cloud_account_email TEXT,
     status TEXT NOT NULL,
     refresh_token TEXT,
+    store_key TEXT,
     cached_certificate TEXT,
     cached_certificate_expires_at INTEGER,
     bound_at INTEGER NOT NULL,
@@ -460,6 +458,7 @@ export async function seedProLicense(db: Awaited<ReturnType<typeof createTestApp
     instanceId: 'test-instance',
     cloudAccountId: 'test-account',
     refreshToken: 'test-refresh-token',
+    storeKey: 'test-store-key',
     cachedCert,
     cachedExpiresAt: expiresAt,
     lastRefreshAt: issuedAt,

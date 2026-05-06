@@ -48,9 +48,7 @@ export type QuotaDeliveryEventStatus = 'processed' | 'duplicate' | 'failed'
 export interface QuotaStoreSettings {
   id: string
   enabled: boolean
-  cloudBaseUrl: string
-  publicInstanceUrl: string
-  webhookSigningSecretSet: boolean
+  status: 'ready' | 'store_disabled' | 'cloud_unbound'
   createdAt: string
   updatedAt: string
 }

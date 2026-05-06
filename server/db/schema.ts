@@ -47,9 +47,6 @@ export const orgQuotas = sqliteTable('org_quotas', {
 export const quotaStoreSettings = sqliteTable('quota_store_settings', {
   id: text('id').primaryKey(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
-  cloudBaseUrl: text('cloud_base_url').notNull(),
-  publicInstanceUrl: text('public_instance_url').notNull(),
-  webhookSigningSecret: text('webhook_signing_secret').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -170,6 +167,7 @@ export const licenseBindings = sqliteTable(
     cloudAccountEmail: text('cloud_account_email'),
     status: text('status').notNull(),
     refreshToken: text('refresh_token'),
+    storeKey: text('store_key'),
     cachedCertificate: text('cached_certificate'),
     cachedCertificateExpiresAt: integer('cached_certificate_expires_at'),
     boundAt: integer('bound_at').notNull(),

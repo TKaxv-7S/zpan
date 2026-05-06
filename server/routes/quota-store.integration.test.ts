@@ -1,8 +1,10 @@
 import { sql } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ZPAN_CLOUD_URL_DEFAULT } from '../../shared/constants'
 import { adminHeaders, authedHeaders, createTestApp, seedProLicense } from '../test/setup.js'
 
-const SECRET = 'quota-secret'
+const REFRESH_TOKEN = 'test-refresh-token'
+const STORE_KEY = 'test-store-key'
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -77,48 +79,49 @@ describe('Quota Store API', () => {
     expect(empty.status).toBe(200)
     await expect(empty.json()).resolves.toBeNull()
     expect(filled.status).toBe(200)
-    await expect(filled.json()).resolves.toMatchObject({
+    const payload = await filled.json()
+    expect(payload).toMatchObject({
       enabled: true,
-      cloudBaseUrl: 'https://cloud.example',
-      publicInstanceUrl: 'https://zpan.example//',
-      webhookSigningSecretSet: true,
+      status: 'ready',
     })
+    expect(payload).not.toHaveProperty('cloudBaseUrl')
+    expect(payload).not.toHaveProperty('publicInstanceUrl')
+    expect(payload).not.toHaveProperty('webhookSigningSecret')
   })
 
-  it('keeps the existing webhook secret when settings update omits it', async () => {
+  it('updates quota store operator settings only', async () => {
     const { app, db } = await createTestApp()
     await seedProLicense(db)
     const headers = await adminHeaders(app)
     await seedSettings(app, headers)
-    const orgId = await getFirstOrgId(db)
 
     const updated = await app.request('/api/admin/quota-store/settings', {
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        enabled: true,
-        cloudBaseUrl: 'https://cloud.example',
-        publicInstanceUrl: 'https://zpan.example/updated',
-      }),
+      body: JSON.stringify({ enabled: false }),
     })
-    const delivery = await postWebhook(
-      app,
-      JSON.stringify({
-        eventId: 'evt-preserved-secret',
-        cloudRedemptionId: 'redemption-preserved-secret',
-        targetOrgId: orgId,
-        source: 'redeem_code',
-        code: 'PRESERVED',
-        bytes: 1024,
-      }),
-    )
 
     expect(updated.status).toBe(200)
     await expect(updated.json()).resolves.toMatchObject({
-      publicInstanceUrl: 'https://zpan.example/updated',
-      webhookSigningSecretSet: true,
+      enabled: false,
+      status: 'store_disabled',
     })
-    expect(delivery.status).toBe(200)
+  })
+
+  it('reports Cloud not connected when the binding store key is missing', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await adminHeaders(app)
+    await seedSettings(app, headers)
+    await db.run(sql`UPDATE license_bindings SET store_key = NULL`)
+
+    const res = await app.request('/api/admin/quota-store/settings', { headers })
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toMatchObject({
+      enabled: true,
+      status: 'cloud_unbound',
+    })
   })
 
   it('creates, lists, and syncs quota store packages', async () => {
@@ -139,17 +142,203 @@ describe('Quota Store API', () => {
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
     const syncBody = String(init.body)
     const syncTimestamp = (init.headers as Record<string, string>)['x-zpan-store-timestamp']
-    expect(String(url)).toBe('https://cloud.example/api/store/packages/sync')
-    expect((init.headers as Record<string, string>)['x-zpan-store-signature']).toBe(
-      await signPayload(`${syncTimestamp}.${syncBody}`),
-    )
+    expect(syncTimestamp).toBeUndefined()
+    expect(String(url)).toBe(`${ZPAN_CLOUD_URL_DEFAULT}/api/store/packages/sync`)
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${REFRESH_TOKEN}`)
     expect(JSON.parse(syncBody)).toMatchObject({
       boundLicenseId: 'test-binding',
-      callbackUrl: 'https://zpan.example/api/quota-store/webhooks/cloud',
       packages: [{ name: 'Small', description: 'starter', bytes: 4096, amount: 500, currency: 'usd', active: true }],
     })
+    expect(JSON.parse(syncBody)).not.toHaveProperty('callbackUrl')
     expect(listed.status).toBe(200)
     await expect(listed.json()).resolves.toMatchObject({ total: 1 })
+  })
+
+  it('does not send callback URLs during package sync', async () => {
+    const { app, db } = await createTestApp({ ZPAN_PUBLIC_ORIGIN: 'https://zpan.example/custom-path' })
+    await seedProLicense(db)
+    const headers = await adminHeaders(app)
+    await seedSettings(app, headers)
+
+    const created = await app.request('/api/admin/quota-store/packages', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Configured', description: '', bytes: 4096, amount: 500, currency: 'usd' }),
+    })
+
+    expect(created.status).toBe(201)
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('callbackUrl')
+  })
+
+  it('ignores spoofed forwarded origin for Cloud checkout return URLs', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await authedHeaders(app, 'buyer@example.com')
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+
+    const checkout = await app.request('/api/quota-store/checkout', {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'attacker.example',
+      },
+      body: JSON.stringify({ packageId, targetOrgId: orgId }),
+    })
+
+    expect(checkout.status).toBe(200)
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    const body = JSON.parse(init.body as string) as { session: string }
+    expect(decodeSession(body.session)).toMatchObject({
+      successUrl: 'http://localhost/store',
+      cancelUrl: 'http://localhost/store',
+    })
+  })
+
+  it('does not use forwarded origins during package sync', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await adminHeaders(app)
+    await seedSettings(app, headers)
+
+    const created = await app.request('/api/admin/quota-store/packages', {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'x-forwarded-proto': 'http',
+        'x-forwarded-host': 'localhost',
+      },
+      body: JSON.stringify({ name: 'Bad Proto', description: '', bytes: 4096, amount: 500, currency: 'usd' }),
+    })
+
+    expect(created.status).toBe(201)
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('callbackUrl')
+  })
+
+  it('ignores non-https forwarded schemes for Cloud checkout return URLs', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await authedHeaders(app, 'buyer@example.com')
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+
+    const checkout = await app.request('/api/quota-store/checkout', {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'x-forwarded-proto': 'http',
+        'x-forwarded-host': 'localhost',
+      },
+      body: JSON.stringify({ packageId, targetOrgId: orgId }),
+    })
+
+    expect(checkout.status).toBe(200)
+    const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    const checkoutBody = JSON.parse(String(checkoutInit.body)) as { session: string }
+    expect(decodeSession(checkoutBody.session)).toMatchObject({
+      successUrl: 'http://localhost/store',
+      cancelUrl: 'http://localhost/store',
+    })
+  })
+
+  it('uses https origin for non-local http request URLs', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await authedHeaders(app, 'buyer@example.com')
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+
+    const checkout = await app.request('http://files.example.com/api/quota-store/checkout', {
+      method: 'POST',
+      headers: { ...headers, Host: 'localhost', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ packageId, targetOrgId: orgId }),
+    })
+
+    expect(checkout.status).toBe(200)
+    const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    const checkoutBody = JSON.parse(String(checkoutInit.body)) as { session: string }
+    expect(decodeSession(checkoutBody.session)).toMatchObject({
+      successUrl: 'https://files.example.com/store',
+      cancelUrl: 'https://files.example.com/store',
+    })
+  })
+
+  it('uses configured auth URL origin for checkout return URLs', async () => {
+    const { app, db } = await createTestApp({ BETTER_AUTH_URL: 'https://auth.example.com/path' })
+    await seedProLicense(db)
+    const headers = await authedHeaders(app, 'buyer@example.com')
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+
+    const checkout = await app.request('/api/quota-store/checkout', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ packageId, targetOrgId: orgId }),
+    })
+
+    expect(checkout.status).toBe(200)
+    const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    const checkoutBody = JSON.parse(String(checkoutInit.body)) as { session: string }
+    expect(decodeSession(checkoutBody.session)).toMatchObject({
+      successUrl: 'https://auth.example.com/store',
+      cancelUrl: 'https://auth.example.com/store',
+    })
+  })
+
+  it('falls back to request origin when public origin env is invalid', async () => {
+    const { app, db } = await createTestApp({ ZPAN_PUBLIC_ORIGIN: 'not a url' })
+    await seedProLicense(db)
+    const headers = await authedHeaders(app, 'buyer@example.com')
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+
+    const checkout = await app.request('/api/quota-store/checkout', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ packageId, targetOrgId: orgId }),
+    })
+
+    expect(checkout.status).toBe(200)
+    const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    const checkoutBody = JSON.parse(String(checkoutInit.body)) as { session: string }
+    expect(decodeSession(checkoutBody.session)).toMatchObject({
+      successUrl: 'http://localhost/store',
+      cancelUrl: 'http://localhost/store',
+    })
+  })
+
+  it('falls back to request origin when public origin env uses an unsupported scheme', async () => {
+    const { app, db } = await createTestApp({ ZPAN_PUBLIC_ORIGIN: 'ftp://files.example.com' })
+    await seedProLicense(db)
+    const headers = await authedHeaders(app, 'buyer@example.com')
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+
+    const checkout = await app.request('/api/quota-store/checkout', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ packageId, targetOrgId: orgId }),
+    })
+
+    expect(checkout.status).toBe(200)
+    const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
+    const checkoutBody = JSON.parse(String(checkoutInit.body)) as { session: string }
+    expect(decodeSession(checkoutBody.session)).toMatchObject({
+      successUrl: 'http://localhost/store',
+      cancelUrl: 'http://localhost/store',
+    })
   })
 
   it('surfaces package create sync failures without clearing the local package', async () => {
@@ -238,12 +427,12 @@ describe('Quota Store API', () => {
     expect(res.status).toBe(200)
     const calls = vi.mocked(fetch).mock.calls
     const [url, init] = calls[calls.length - 1] as [URL, RequestInit]
-    expect(String(url)).toBe('https://cloud.example/api/store/packages/sync')
+    expect(String(url)).toBe(`${ZPAN_CLOUD_URL_DEFAULT}/api/store/packages/sync`)
     expect(JSON.parse(init.body as string)).toMatchObject({
       boundLicenseId: 'test-binding',
-      callbackUrl: 'https://zpan.example/api/quota-store/webhooks/cloud',
       packages: [],
     })
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('callbackUrl')
   })
 
   it('ignores stale Cloud catalog rows when marking packages synced', async () => {
@@ -391,22 +580,32 @@ describe('Quota Store API', () => {
     const [redemptionUrl, redemptionInit] = vi.mocked(fetch).mock.calls[1] as [URL, RequestInit]
     const checkoutBody = JSON.parse(String(checkoutInit.body)) as { session: string }
     const redemptionBody = JSON.parse(String(redemptionInit.body)) as { code: string; session: string }
-    expect(String(checkoutUrl)).toBe('https://cloud.example/api/store/checkout')
-    expect(String(redemptionUrl)).toBe('https://cloud.example/api/store/redemptions')
-    expect(checkoutInit.headers).toEqual({ 'Content-Type': 'application/json' })
-    expect(redemptionInit.headers).toEqual({ 'Content-Type': 'application/json' })
-    await expect(decodeSession(checkoutBody.session)).resolves.toMatchObject({
+    expect(String(checkoutUrl)).toBe(`${ZPAN_CLOUD_URL_DEFAULT}/api/store/checkout`)
+    expect(String(redemptionUrl)).toBe(`${ZPAN_CLOUD_URL_DEFAULT}/api/store/redemptions`)
+    expect(checkoutInit.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${REFRESH_TOKEN}`,
+    })
+    expect(redemptionInit.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${REFRESH_TOKEN}`,
+    })
+    expect(checkoutBody.session).toMatch(/^[A-Za-z0-9_-]+\.[0-9a-f]{64}$/)
+    expect(await verifySessionSignature(checkoutBody.session, STORE_KEY)).toBe(true)
+    expect(decodeSession(checkoutBody.session)).toMatchObject({
       boundLicenseId: 'test-binding',
       externalPackageId: packageId,
       targetOrgId: orgId,
       amount: 500,
       currency: 'usd',
       bytes: 4096,
-      successUrl: 'https://zpan.example/store',
-      cancelUrl: 'https://zpan.example/store',
+      successUrl: 'http://localhost/store',
+      cancelUrl: 'http://localhost/store',
     })
     expect(redemptionBody.code).toBe('CODE-OK')
-    await expect(decodeSession(redemptionBody.session)).resolves.toMatchObject({
+    expect(redemptionBody.session).toMatch(/^[A-Za-z0-9_-]+\.[0-9a-f]{64}$/)
+    expect(await verifySessionSignature(redemptionBody.session, STORE_KEY)).toBe(true)
+    expect(decodeSession(redemptionBody.session)).toMatchObject({
       boundLicenseId: 'test-binding',
       targetOrgId: orgId,
     })
@@ -424,9 +623,6 @@ describe('Quota Store API', () => {
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         enabled: false,
-        cloudBaseUrl: 'https://cloud.example',
-        publicInstanceUrl: 'https://zpan.example/',
-        webhookSigningSecret: SECRET,
       }),
     })
 
@@ -458,19 +654,12 @@ describe('Quota Store API', () => {
     await expect(grants.json()).resolves.toEqual({ error: 'quota_store_disabled' })
   })
 
-  it('hides self-service store endpoints until webhook signing is configured', async () => {
+  it('hides self-service store endpoints until Cloud is bound', async () => {
     const { app, db } = await createTestApp()
     await seedProLicense(db)
     const headers = await authedHeaders(app, 'buyer@example.com')
-    await app.request('/api/admin/quota-store/settings', {
-      method: 'PUT',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        enabled: true,
-        cloudBaseUrl: 'https://cloud.example',
-        publicInstanceUrl: 'https://zpan.example',
-      }),
-    })
+    await seedSettings(app, headers)
+    await db.run(sql`UPDATE license_bindings SET refresh_token = NULL`)
 
     const orgId = await getFirstOrgId(db)
     const packageId = await seedPackage(db)
@@ -488,16 +677,16 @@ describe('Quota Store API', () => {
     })
     const grants = await app.request('/api/quota-store/grants', { headers })
 
-    expect(packages.status).toBe(403)
-    await expect(packages.json()).resolves.toEqual({ error: 'quota_store_webhook_secret_missing' })
-    expect(targets.status).toBe(403)
-    await expect(targets.json()).resolves.toEqual({ error: 'quota_store_webhook_secret_missing' })
-    expect(checkout.status).toBe(403)
-    await expect(checkout.json()).resolves.toEqual({ error: 'quota_store_webhook_secret_missing' })
-    expect(redemption.status).toBe(403)
-    await expect(redemption.json()).resolves.toEqual({ error: 'quota_store_webhook_secret_missing' })
-    expect(grants.status).toBe(403)
-    await expect(grants.json()).resolves.toEqual({ error: 'quota_store_webhook_secret_missing' })
+    expect(packages.status).toBe(402)
+    await expect(packages.json()).resolves.toMatchObject({ error: 'feature_not_available', feature: 'quota_store' })
+    expect(targets.status).toBe(402)
+    await expect(targets.json()).resolves.toMatchObject({ error: 'feature_not_available', feature: 'quota_store' })
+    expect(checkout.status).toBe(402)
+    await expect(checkout.json()).resolves.toMatchObject({ error: 'feature_not_available', feature: 'quota_store' })
+    expect(redemption.status).toBe(402)
+    await expect(redemption.json()).resolves.toMatchObject({ error: 'feature_not_available', feature: 'quota_store' })
+    expect(grants.status).toBe(402)
+    await expect(grants.json()).resolves.toMatchObject({ error: 'feature_not_available', feature: 'quota_store' })
   })
 
   it('rejects malformed successful checkout responses', async () => {
@@ -851,7 +1040,7 @@ describe('Quota Store API', () => {
     await expect(retry.json()).resolves.toEqual({ error: 'delivery_payload_conflict' })
   })
 
-  it('rejects invalid Cloud signatures', async () => {
+  it('rejects missing Cloud delivery auth', async () => {
     const { app, db } = await createTestApp()
     await seedProLicense(db)
     const headers = await adminHeaders(app)
@@ -861,8 +1050,6 @@ describe('Quota Store API', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-zpan-cloud-timestamp': String(Date.now()),
-        'x-zpan-cloud-signature': 'bad',
       },
       body: JSON.stringify({ eventId: 'evt-bad' }),
     })
@@ -870,25 +1057,117 @@ describe('Quota Store API', () => {
     expect(res.status).toBe(401)
   })
 
-  it('rejects same-length invalid Cloud signatures', async () => {
+  it('rejects invalid Cloud delivery signatures', async () => {
     const { app, db } = await createTestApp()
     await seedProLicense(db)
     const headers = await adminHeaders(app)
     await seedSettings(app, headers)
     const payload = JSON.stringify({ eventId: 'evt-bad-same-length' })
-    const timestamp = String(Date.now())
-    const signature = await signPayload(`${timestamp}.${payload}`)
-    const badSignature = `${signature.slice(0, -1)}${signature.endsWith('0') ? '1' : '0'}`
 
     const res = await app.request('/api/quota-store/webhooks/cloud', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-zpan-cloud-timestamp': timestamp,
-        'x-zpan-cloud-signature': badSignature,
+        'x-zpan-cloud-timestamp': String(Date.now()),
+        'x-zpan-cloud-signature': 'bad-signature',
       },
       body: payload,
     })
+
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects wrong Cloud delivery signatures with valid hex shape', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await adminHeaders(app)
+    await seedSettings(app, headers)
+    const payload = JSON.stringify({ eventId: 'evt-wrong-hex-signature' })
+
+    const res = await app.request('/api/quota-store/webhooks/cloud', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-zpan-cloud-timestamp': String(Date.now()),
+        'x-zpan-cloud-signature': '0'.repeat(64),
+      },
+      body: payload,
+    })
+
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects Cloud delivery signatures with stale timestamps', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await adminHeaders(app)
+    await seedSettings(app, headers)
+    const payload = JSON.stringify({ eventId: 'evt-stale-timestamp' })
+
+    const res = await app.request('/api/quota-store/webhooks/cloud', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await signedWebhookHeaders(payload, STORE_KEY, Date.now() - 6 * 60 * 1000)),
+      },
+      body: payload,
+    })
+
+    expect(res.status).toBe(401)
+  })
+
+  it('authorizes Cloud deliveries with the stored binding store key', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await adminHeaders(app)
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+    await db.run(sql`UPDATE license_bindings SET store_key = 'rotated-store-key'`)
+    const payload = JSON.stringify({
+      eventId: 'evt-rotated-token',
+      cloudOrderId: 'order-rotated-token',
+      targetOrgId: orgId,
+      packageId,
+      source: 'stripe',
+      bytes: 4096,
+    })
+
+    const stale = await postWebhook(app, payload)
+    const current = await app.request('/api/quota-store/webhooks/cloud', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await signedWebhookHeaders(payload, 'rotated-store-key')),
+      },
+      body: payload,
+    })
+
+    expect(stale.status).toBe(401)
+    expect(current.status).toBe(200)
+    await expect(current.json()).resolves.toMatchObject({ success: true, duplicate: false })
+  })
+
+  it('rejects stale Cloud delivery signatures after binding store-key rotation', async () => {
+    const { app, db } = await createTestApp()
+    await seedProLicense(db)
+    const headers = await adminHeaders(app)
+    await seedSettings(app, headers)
+    const orgId = await getFirstOrgId(db)
+    const packageId = await seedPackage(db)
+    await db.run(sql`UPDATE license_bindings SET store_key = 'rotated-store-key'`)
+
+    const res = await postWebhook(
+      app,
+      JSON.stringify({
+        eventId: 'evt-stale-token',
+        cloudOrderId: 'order-stale-token',
+        targetOrgId: orgId,
+        packageId,
+        source: 'stripe',
+        bytes: 4096,
+      }),
+    )
 
     expect(res.status).toBe(401)
   })
@@ -948,12 +1227,7 @@ async function seedSettings(app: Awaited<ReturnType<typeof createTestApp>>['app'
   await app.request('/api/admin/quota-store/settings', {
     method: 'PUT',
     headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      enabled: true,
-      cloudBaseUrl: 'https://cloud.example',
-      publicInstanceUrl: 'https://zpan.example//',
-      webhookSigningSecret: SECRET,
-    }),
+    body: JSON.stringify({ enabled: true }),
   })
 }
 
@@ -977,8 +1251,8 @@ async function seedSettingsRow(db: Awaited<ReturnType<typeof createTestApp>>['db
   const now = Date.now()
   await db.run(sql`
     INSERT INTO quota_store_settings
-      (id, enabled, cloud_base_url, public_instance_url, webhook_signing_secret, created_at, updated_at)
-    VALUES ('default', 1, 'https://cloud.example', 'https://zpan.example', ${SECRET}, ${now}, ${now})
+      (id, enabled, created_at, updated_at)
+    VALUES ('default', 1, ${now}, ${now})
   `)
 }
 
@@ -991,40 +1265,60 @@ async function seedGrant(db: Awaited<ReturnType<typeof createTestApp>>['db'], or
 }
 
 async function postWebhook(app: Awaited<ReturnType<typeof createTestApp>>['app'], payload: string) {
-  const timestamp = String(Date.now())
   return app.request('/api/quota-store/webhooks/cloud', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-zpan-cloud-timestamp': timestamp,
-      'x-zpan-cloud-signature': await signPayload(`${timestamp}.${payload}`),
+      ...(await signedWebhookHeaders(payload, STORE_KEY)),
     },
     body: payload,
   })
 }
 
-async function signPayload(payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(SECRET),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))
-  return [...new Uint8Array(signature)].map((b) => b.toString(16).padStart(2, '0')).join('')
+async function signedWebhookHeaders(payload: string, storeKey: string, timestampMs = Date.now()) {
+  const timestamp = String(timestampMs)
+  return {
+    'x-zpan-cloud-timestamp': timestamp,
+    'x-zpan-cloud-signature': await signPayload(`${timestamp}.${payload}`, storeKey),
+  }
 }
 
-async function decodeSession(token: string): Promise<Record<string, unknown>> {
-  const [encoded, signature] = token.split('.')
-  expect(signature).toBe(await signPayload(encoded))
-  return JSON.parse(new TextDecoder().decode(base64UrlBytes(encoded))) as Record<string, unknown>
+function decodeSession(token: string): Record<string, unknown> {
+  const [payload] = token.split('.')
+  if (!payload) throw new Error('missing_payload')
+  return JSON.parse(decodeBase64Url(payload)) as Record<string, unknown>
 }
 
-function base64UrlBytes(value: string): Uint8Array {
-  const base64 = value
-    .replaceAll('-', '+')
-    .replaceAll('_', '/')
-    .padEnd(Math.ceil(value.length / 4) * 4, '=')
-  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+async function verifySessionSignature(token: string, storeKey: string): Promise<boolean> {
+  const [payload, signature] = token.split('.')
+  if (!payload || !signature) return false
+  return signature === (await signPayload(payload, storeKey))
+}
+
+async function signPayload(payload: string, storeKey: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', encodeBuffer(storeKey), { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+  ])
+  return hex(await crypto.subtle.sign('HMAC', key, encodeBuffer(payload)))
+}
+
+function decodeBase64Url(value: string): string {
+  const normalized = value.replaceAll('-', '+').replaceAll('_', '/')
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=')
+  const binary = atob(padded)
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
+
+function encodeBytes(value: string): Uint8Array {
+  return new TextEncoder().encode(value)
+}
+
+function encodeBuffer(value: string): ArrayBuffer {
+  const bytes = encodeBytes(value)
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+}
+
+function hex(buffer: ArrayBuffer): string {
+  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
