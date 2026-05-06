@@ -120,6 +120,17 @@ export async function consumeTrafficIfQuotaAllows(
   return updated.length > 0
 }
 
+export async function refundTraffic(db: Database, orgId: string, bytes: number, now = new Date()): Promise<void> {
+  if (bytes <= 0) return
+  const period = currentTrafficPeriod(now)
+  await db
+    .update(orgQuotas)
+    .set({
+      trafficUsed: sql`CASE WHEN ${orgQuotas.trafficUsed} > ${bytes} THEN ${orgQuotas.trafficUsed} - ${bytes} ELSE 0 END`,
+    })
+    .where(sql`${orgQuotas.orgId} = ${orgId} AND ${orgQuotas.trafficPeriod} = ${period}`)
+}
+
 export async function incrementUsageIfEffectiveQuotaAllows(
   db: Database,
   orgId: string,

@@ -4,10 +4,9 @@ import type { Storage as S3Storage } from '../../shared/types'
 import { imageHostingConfigs } from '../db/schema'
 import type { Env } from '../middleware/platform'
 import { PRESIGN_TTL_SECS, s3 } from '../routes/share-utils'
+import { consumeTrafficIfQuotaAllows, refundTraffic } from '../services/effective-quota'
 import { getImageByOrgPath, incrementAccessCount, resolveCustomDomain } from '../services/image-hosting'
 import { getStorage } from '../services/storage'
-
-const IMAGE_MAX_AGE = Math.min(PRESIGN_TTL_SECS - 30, 300)
 
 function stripPort(host: string): string {
   const lastColon = host.lastIndexOf(':')
@@ -65,11 +64,19 @@ async function handleImageByPath(c: Context<Env>, orgId: string, virtualPath: st
   const storage = (await getStorage(db, image.storageId)) as unknown as S3Storage
   if (!storage) return c.json({ error: 'Storage not found' }, 404)
 
-  await incrementAccessCount(db, image.id)
+  const trafficAllowed = await consumeTrafficIfQuotaAllows(db, image.orgId, image.size)
+  if (!trafficAllowed) return c.json({ error: 'Traffic quota exceeded' }, 422)
 
-  const url = await s3.presignInline(storage, image.storageKey, image.mime, PRESIGN_TTL_SECS)
+  let url: string
+  try {
+    url = await s3.presignInline(storage, image.storageKey, image.mime, PRESIGN_TTL_SECS)
+    await incrementAccessCount(db, image.id)
+  } catch (e) {
+    await refundTraffic(db, image.orgId, image.size)
+    throw e
+  }
   const res = c.redirect(url, 302)
-  res.headers.set('Cache-Control', `public, max-age=${IMAGE_MAX_AGE}`)
+  res.headers.set('Cache-Control', 'no-store')
   return res
 }
 
