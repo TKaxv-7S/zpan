@@ -102,4 +102,5 @@ Thank you to all the people who contributed to ZPan!
 
 ## License
 
-ZPan is under the GPL 3.0 license. See the [LICENSE](LICENSE) file for details.
+ZPan is under the GNU Affero General Public License v3.0. See the
+[LICENSE](LICENSE) file for details.

@@ -86,7 +86,7 @@ Operator-grade features for running ZPan as a service (internally at a company, 
 
 Pro is one product with two delivery modes:
 
-- **Self-hosted Pro** — buy a license, run ZPan yourself. License token verified locally with an embedded public key; works offline.
+- **Self-hosted Pro** — buy a license, run ZPan yourself. The instance binds to ZPan Cloud for Pro entitlement and verifies the issued certificate locally.
 - **Managed Pro** — same features, we operate the ZPan instance and storage. You stop caring about ops.
 
 Licenses can be purchased self-service via Stripe or redeemed from codes issued by the ZPan team. See [v2.6](docs/roadmap/v2.6.md) for the launch plan.
