@@ -1,35 +1,33 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { SignupMode } from '@shared/constants'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Globe2, HardDrive } from 'lucide-react'
+import { Globe2 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { BrandingSection } from '@/components/admin/branding-section'
+import { type StorageQuotaUnit, StorageSettingsSection } from '@/components/admin/storage-settings-section'
 import { ProBadge } from '@/components/ProBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { siteOptionsQueryKey, useSiteOptions } from '@/hooks/use-site-options'
 import { useEntitlement } from '@/hooks/useEntitlement'
-import { setSystemOption } from '@/lib/api'
-import { formatSize } from '@/lib/format'
+import { getQuotaStoreSettings, setSystemOption, updateQuotaStoreSettings } from '@/lib/api'
 
 export const Route = createFileRoute('/_authenticated/admin/settings/')({
   component: SettingsPage,
 })
 
-const UNITS = { MB: 1024 * 1024, GB: 1024 * 1024 * 1024 } as const
-type Unit = keyof typeof UNITS
+const UNITS: Record<StorageQuotaUnit, number> = { MB: 1024 * 1024, GB: 1024 * 1024 * 1024 }
 
-function bytesToDisplay(bytes: number): { value: number; unit: Unit } {
+function bytesToDisplay(bytes: number): { value: number; unit: StorageQuotaUnit } {
   if (bytes >= UNITS.GB && bytes % UNITS.GB === 0) return { value: bytes / UNITS.GB, unit: 'GB' }
   return { value: bytes / UNITS.MB, unit: 'MB' }
 }
@@ -39,6 +37,7 @@ const settingsSchema = z.object({
   siteDescription: z.string(),
   quotaValue: z.coerce.number().positive('Quota must be a positive number'),
   quotaUnit: z.enum(['MB', 'GB']),
+  storagePlansEnabled: z.boolean(),
   registrationsEnabled: z.boolean(),
 })
 
@@ -56,13 +55,20 @@ function ProFeatureHeader({ title, description, tooltip }: { title: string; desc
   )
 }
 
-function SettingsPage() {
+export function SettingsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { siteName, siteDescription, defaultOrgQuota: quotaBytes, authSignupMode, isLoading } = useSiteOptions()
   const { hasFeature } = useEntitlement()
   const hasWhiteLabel = hasFeature('white_label')
   const hasOpenRegistration = hasFeature('open_registration')
+  const hasStoragePlans = hasFeature('quota_store')
+  const storagePlansQuery = useQuery({
+    queryKey: ['admin', 'storage-plans', 'settings'],
+    queryFn: getQuotaStoreSettings,
+    enabled: hasStoragePlans,
+    retry: false,
+  })
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
@@ -70,7 +76,8 @@ function SettingsPage() {
       siteName: '',
       siteDescription: '',
       quotaValue: 0,
-      quotaUnit: 'MB' as Unit,
+      quotaUnit: 'MB',
+      storagePlansEnabled: false,
       registrationsEnabled: false,
     },
   })
@@ -83,9 +90,10 @@ function SettingsPage() {
       siteDescription,
       quotaValue: value,
       quotaUnit: unit,
+      storagePlansEnabled: storagePlansQuery.data?.enabled ?? false,
       registrationsEnabled: authSignupMode === SignupMode.OPEN,
     })
-  }, [isLoading, siteName, siteDescription, quotaBytes, authSignupMode, form])
+  }, [isLoading, siteName, siteDescription, quotaBytes, storagePlansQuery.data, authSignupMode, form])
 
   const identityMutation = useMutation({
     mutationFn: async () => {
@@ -104,19 +112,23 @@ function SettingsPage() {
     },
   })
 
-  const quotaMutation = useMutation({
+  const storageMutation = useMutation({
     mutationFn: async () => {
       const valid = await form.trigger(['quotaValue', 'quotaUnit'])
       if (!valid) throw new Error(t('admin.settings.positiveQuotaRequired'))
       const values = form.getValues()
       const bytes = Math.round(values.quotaValue * UNITS[values.quotaUnit])
       await setSystemOption('default_org_quota', String(bytes), false)
+      if (hasStoragePlans) await updateQuotaStoreSettings({ enabled: values.storagePlansEnabled })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: siteOptionsQueryKey })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'storage-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'storage-plans', 'settings'] })
       toast.success(t('admin.settings.saved'))
     },
     onError: (err) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'storage-plans', 'settings'] })
       toast.error(err.message)
     },
   })
@@ -134,9 +146,8 @@ function SettingsPage() {
     },
   })
 
-  const quotaValue = form.watch('quotaValue')
   const quotaUnit = form.watch('quotaUnit')
-  const quotaDisplayBytes = quotaValue * UNITS[quotaUnit]
+  const storagePlansEnabled = form.watch('storagePlansEnabled')
   const registrationsEnabled = form.watch('registrationsEnabled')
 
   if (isLoading) {
@@ -245,60 +256,20 @@ function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/60">
-          <CardHeader className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl border border-border/60 bg-emerald-500/10 p-2 text-emerald-600">
-                <HardDrive className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <CardTitle>{t('admin.settings.quotaSection')}</CardTitle>
-                <CardDescription>{t('admin.settings.quotaDescription')}</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="quotaValue">{t('admin.settings.defaultOrgQuota')}</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="quotaValue"
-                  type="number"
-                  min={1}
-                  step={1}
-                  className="flex-1"
-                  {...form.register('quotaValue')}
-                />
-                <Select value={quotaUnit} onValueChange={(v) => form.setValue('quotaUnit', v as Unit)}>
-                  <SelectTrigger className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MB">MB</SelectItem>
-                    <SelectItem value="GB">GB</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/30 px-4 py-3">
-                <p className="text-sm font-medium">
-                  {Number.isFinite(quotaDisplayBytes) && quotaDisplayBytes > 0 ? formatSize(quotaDisplayBytes) : '--'}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {t('admin.settings.defaultOrgQuotaHint')}
-                </p>
-              </div>
-              {form.formState.errors.quotaValue && (
-                <p className="text-xs text-destructive">{form.formState.errors.quotaValue.message}</p>
-              )}
-            </div>
-
-            <div className="flex justify-end">
-              <Button type="button" disabled={quotaMutation.isPending} onClick={() => quotaMutation.mutate()}>
-                {quotaMutation.isPending ? t('common.loading') : t('common.save')}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <StorageSettingsSection
+          hasStoragePlans={hasStoragePlans}
+          quotaUnit={quotaUnit}
+          storagePlansEnabled={storagePlansEnabled}
+          quotaError={form.formState.errors.quotaValue?.message}
+          quotaInputProps={form.register('quotaValue')}
+          pending={storageMutation.isPending}
+          storagePlansLoading={storagePlansQuery.isLoading}
+          onQuotaUnitChange={(unit) => form.setValue('quotaUnit', unit)}
+          onSave={() => storageMutation.mutate()}
+          onStoragePlansChange={(checked) => {
+            form.setValue('storagePlansEnabled', checked, { shouldDirty: true })
+          }}
+        />
       </form>
 
       <BrandingSection />

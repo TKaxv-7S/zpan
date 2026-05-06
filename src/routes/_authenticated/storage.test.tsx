@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  ApiError,
   createQuotaCheckout,
   getUserQuota,
   listPurchasableQuotaPackages,
@@ -11,7 +12,11 @@ import {
   listQuotaStoreTargets,
   redeemQuotaCode,
 } from '@/lib/api'
-import { StorePage } from './store'
+import { StoragePage } from './storage'
+
+const activeOrganization = vi.hoisted(() => ({
+  value: null as { id: string } | null,
+}))
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -26,14 +31,33 @@ vi.mock('sonner', () => ({
   },
 }))
 
-vi.mock('@/lib/api', () => ({
-  createQuotaCheckout: vi.fn(),
-  getUserQuota: vi.fn(),
-  listPurchasableQuotaPackages: vi.fn(),
-  listQuotaGrants: vi.fn(),
-  listQuotaStoreTargets: vi.fn(),
-  redeemQuotaCode: vi.fn(),
+vi.mock('@/lib/auth-client', () => ({
+  useActiveOrganization: () => ({ data: activeOrganization.value }),
 }))
+
+vi.mock('@/lib/api', () => {
+  class MockApiError extends Error {
+    readonly status: number
+    readonly body: { error?: string }
+
+    constructor(status: number, body: { error?: string }) {
+      super(body.error ?? `HTTP ${status}`)
+      this.name = 'ApiError'
+      this.status = status
+      this.body = body
+    }
+  }
+
+  return {
+    ApiError: MockApiError,
+    createQuotaCheckout: vi.fn(),
+    getUserQuota: vi.fn(),
+    listPurchasableQuotaPackages: vi.fn(),
+    listQuotaGrants: vi.fn(),
+    listQuotaStoreTargets: vi.fn(),
+    redeemQuotaCode: vi.fn(),
+  }
+})
 
 function grant(overrides: Partial<QuotaGrant> = {}): QuotaGrant {
   return {
@@ -73,10 +97,10 @@ function quotaPackage(): QuotaStorePackage {
   }
 }
 
-function renderStorePage(queryClient: QueryClient) {
+function renderStoragePage(queryClient: QueryClient) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <StorePage />
+      <StoragePage />
     </QueryClientProvider>,
   )
 }
@@ -84,9 +108,10 @@ function renderStorePage(queryClient: QueryClient) {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  activeOrganization.value = null
 })
 
-describe('StorePage', () => {
+describe('StoragePage', () => {
   beforeEach(() => {
     vi.mocked(getUserQuota).mockResolvedValue({
       orgId: 'org-1',
@@ -115,13 +140,13 @@ describe('StorePage', () => {
       },
     })
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
-    renderStorePage(queryClient)
+    renderStoragePage(queryClient)
 
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user', 'quota'] }))
   })
 
-  it('hides self-service forms when the store is unavailable', async () => {
-    vi.mocked(listPurchasableQuotaPackages).mockRejectedValue(new Error('quota_store_disabled'))
+  it('hides self-service forms when storage purchases are disabled', async () => {
+    vi.mocked(listPurchasableQuotaPackages).mockRejectedValue(new ApiError(403, { error: 'quota_store_disabled' }))
     vi.mocked(listQuotaStoreTargets).mockResolvedValue({
       items: [{ orgId: 'org-1', name: 'Personal', role: 'owner', type: 'personal' }],
       total: 1,
@@ -134,11 +159,15 @@ describe('StorePage', () => {
         mutations: { retry: false },
       },
     })
-    const view = renderStorePage(queryClient)
+    const view = renderStoragePage(queryClient)
 
-    await waitFor(() => expect(view.getByText('store.unavailable')).toBeTruthy())
-    expect(view.queryByLabelText('store.storageCode')).toBeNull()
-    expect(view.queryByText('store.historyTitle')).toBeNull()
+    await waitFor(() => expect(view.getByText('storage.disabledTitle')).toBeTruthy())
+    expect(view.getByText('storage.disabledSubtitle')).toBeTruthy()
+    expect(view.getByText('storage.disabledBuying')).toBeTruthy()
+    expect(view.getByText('storage.disabledRedeeming')).toBeTruthy()
+    expect(view.getByText('storage.disabledExistingStorage')).toBeTruthy()
+    expect(view.queryByLabelText('storage.storageCode')).toBeNull()
+    expect(view.queryByText('storage.historyTitle')).toBeNull()
     expect(listQuotaStoreTargets).not.toHaveBeenCalled()
     expect(listQuotaGrants).not.toHaveBeenCalled()
   })
@@ -159,16 +188,17 @@ describe('StorePage', () => {
       },
     })
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
-    const view = renderStorePage(queryClient)
+    const view = renderStoragePage(queryClient)
 
-    await waitFor(() => expect(view.getByLabelText('store.storageCode')).toBeTruthy())
-    fireEvent.change(view.getByLabelText('store.storageCode'), { target: { value: 'STORE-CODE' } })
-    fireEvent.click(view.getByRole('button', { name: 'store.redeemButton' }))
+    await waitFor(() => expect(view.getByRole('button', { name: 'storage.redeemTitle' })).toBeTruthy())
+    fireEvent.click(view.getByRole('button', { name: 'storage.redeemTitle' }))
+    fireEvent.change(view.getByLabelText('storage.storageCode'), { target: { value: 'STORE-CODE' } })
+    fireEvent.click(view.getByRole('button', { name: 'storage.redeemButton' }))
 
     await waitFor(() => expect(redeemQuotaCode).toHaveBeenCalledWith('STORE-CODE', 'org-1'))
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user', 'quota'] })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['quota-store', 'grants'] })
-    expect(toast.success).toHaveBeenCalledWith('store.redeemed')
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['storage-plans', 'grants'] })
+    expect(toast.success).toHaveBeenCalledWith('storage.redeemed')
   })
 
   it('closes the checkout window when checkout fails', async () => {
@@ -188,10 +218,12 @@ describe('StorePage', () => {
         mutations: { retry: false },
       },
     })
-    const view = renderStorePage(queryClient)
+    const view = renderStoragePage(queryClient)
 
-    await waitFor(() => expect(view.getByRole('button', { name: 'store.checkout' })).toBeTruthy())
-    fireEvent.click(view.getByRole('button', { name: 'store.checkout' }))
+    await waitFor(() => expect(view.getByRole('button', { name: 'storage.packagesTitle' })).toBeTruthy())
+    fireEvent.click(view.getByRole('button', { name: 'storage.packagesTitle' }))
+    await waitFor(() => expect(view.getByRole('button', { name: 'storage.checkout' })).toBeTruthy())
+    fireEvent.click(view.getByRole('button', { name: 'storage.checkout' }))
 
     await waitFor(() => expect(createQuotaCheckout).toHaveBeenCalledWith('pkg-1', 'org-1'))
     expect(checkoutWindow.close).toHaveBeenCalled()
@@ -218,13 +250,77 @@ describe('StorePage', () => {
       },
     })
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
-    const view = renderStorePage(queryClient)
+    const view = renderStoragePage(queryClient)
 
-    await waitFor(() => expect(view.getByRole('button', { name: 'store.checkout' })).toBeTruthy())
-    fireEvent.click(view.getByRole('button', { name: 'store.checkout' }))
+    await waitFor(() => expect(view.getByRole('button', { name: 'storage.packagesTitle' })).toBeTruthy())
+    fireEvent.click(view.getByRole('button', { name: 'storage.packagesTitle' }))
+    await waitFor(() => expect(view.getByRole('button', { name: 'storage.checkout' })).toBeTruthy())
+    fireEvent.click(view.getByRole('button', { name: 'storage.checkout' }))
 
     await waitFor(() => expect(checkoutWindow.location.href).toBe('https://cloud.example.test/checkout'))
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['user', 'quota'] })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['quota-store', 'grants'] })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['storage-plans', 'grants'] })
+  })
+
+  it('uses the active workspace for grants and checkout', async () => {
+    activeOrganization.value = { id: 'org-2' }
+    vi.mocked(listPurchasableQuotaPackages).mockResolvedValue({ items: [quotaPackage()], total: 1 })
+    vi.mocked(listQuotaStoreTargets).mockResolvedValue({
+      items: [
+        { orgId: 'org-1', name: 'Personal', role: 'owner', type: 'personal' },
+        { orgId: 'org-2', name: 'Team', role: 'owner', type: 'organization' },
+      ],
+      total: 2,
+    })
+    vi.mocked(listQuotaGrants).mockResolvedValue({
+      items: [grant({ orgId: 'org-1' }), grant({ id: 'grant-2', orgId: 'org-2' })],
+      total: 2,
+    })
+    vi.mocked(createQuotaCheckout).mockResolvedValue({
+      checkoutUrl: 'https://cloud.example.test/checkout',
+    })
+    const checkoutWindow = { close: vi.fn(), opener: null, location: { href: '' } }
+    vi.spyOn(window, 'open').mockReturnValue(checkoutWindow as unknown as Window)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    const view = renderStoragePage(queryClient)
+
+    await waitFor(() => expect(view.getByText('org-2')).toBeTruthy())
+    expect(view.queryByText('org-1')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'storage.packagesTitle' }))
+    fireEvent.click(await view.findByRole('button', { name: 'storage.checkout' }))
+
+    await waitFor(() => expect(createQuotaCheckout).toHaveBeenCalledWith('pkg-1', 'org-2'))
+  })
+
+  it('uses dedicated dialog layouts instead of nesting cards in dialogs', async () => {
+    vi.mocked(listPurchasableQuotaPackages).mockResolvedValue({ items: [quotaPackage()], total: 1 })
+    vi.mocked(listQuotaStoreTargets).mockResolvedValue({
+      items: [{ orgId: 'org-1', name: 'Personal', role: 'owner', type: 'personal' }],
+      total: 1,
+    })
+    vi.mocked(listQuotaGrants).mockResolvedValue({ items: [], total: 0 })
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    const view = renderStoragePage(queryClient)
+
+    await waitFor(() => expect(view.getByRole('button', { name: 'storage.redeemTitle' })).toBeTruthy())
+    fireEvent.click(view.getByRole('button', { name: 'storage.redeemTitle' }))
+    expect(document.body.querySelector('[data-slot="dialog-content"] [data-slot="card"]')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'common.close' }))
+
+    fireEvent.click(view.getByRole('button', { name: 'storage.packagesTitle' }))
+    await waitFor(() => expect(view.getByText('100 GB')).toBeTruthy())
+    expect(document.body.querySelector('[data-slot="dialog-content"] [data-slot="card"]')).toBeNull()
   })
 })

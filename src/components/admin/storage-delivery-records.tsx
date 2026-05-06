@@ -4,13 +4,13 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatSize } from '@/lib/format'
 
-export function QuotaStoreDeliveryRecords({ grants }: { grants: QuotaGrant[] }) {
+export function StorageDeliveryRecords({ grants }: { grants: QuotaGrant[] }) {
   const { t } = useTranslation()
 
   if (grants.length === 0) {
     return (
       <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-        {t('admin.quotaStore.delivery.empty')}
+        {t('admin.storagePlans.delivery.empty')}
       </div>
     )
   }
@@ -20,12 +20,12 @@ export function QuotaStoreDeliveryRecords({ grants }: { grants: QuotaGrant[] }) 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t('admin.quotaStore.delivery.source')}</TableHead>
-            <TableHead>{t('admin.quotaStore.delivery.storage')}</TableHead>
-            <TableHead>{t('admin.quotaStore.delivery.target')}</TableHead>
-            <TableHead>{t('admin.quotaStore.delivery.terminalUser')}</TableHead>
-            <TableHead>{t('admin.quotaStore.delivery.reference')}</TableHead>
-            <TableHead>{t('admin.quotaStore.delivery.createdAt')}</TableHead>
+            <TableHead>{t('admin.storagePlans.delivery.source')}</TableHead>
+            <TableHead>{t('admin.storagePlans.delivery.storage')}</TableHead>
+            <TableHead>{t('admin.storagePlans.delivery.target')}</TableHead>
+            <TableHead>{t('admin.storagePlans.delivery.terminalUser')}</TableHead>
+            <TableHead>{t('admin.storagePlans.delivery.reference')}</TableHead>
+            <TableHead>{t('admin.storagePlans.delivery.createdAt')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

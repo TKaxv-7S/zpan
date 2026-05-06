@@ -4,7 +4,6 @@ import { Plus } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -53,7 +52,7 @@ export function packageFormFromPackage(pkg: QuotaStorePackage): PackageFormState
   }
 }
 
-export function QuotaStorePackageForm({
+export function StoragePlanForm({
   editing,
   form,
   available,
@@ -73,30 +72,25 @@ export function QuotaStorePackageForm({
   const { t } = useTranslation()
 
   return (
-    <Card className="border-border/60">
-      <CardHeader>
-        <CardTitle>{editing ? t('admin.quotaStore.editPackage') : t('admin.quotaStore.newPackage')}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <PackageIdentityFields form={form} onFormChange={onFormChange} />
-        <PackageSizeFields form={form} onFormChange={onFormChange} />
-        <PackageAmountFields form={form} onFormChange={onFormChange} />
-        <NumberField
-          label={t('admin.quotaStore.sortOrder')}
-          id="packageSortOrder"
-          value={form.sortOrder}
-          onChange={(sortOrder) => onFormChange({ ...form, sortOrder })}
-        />
-        <PackageActiveSwitch active={form.active} onChange={(active) => onFormChange({ ...form, active })} />
-        <PackageFormActions
-          editing={editing}
-          available={available}
-          pending={pending}
-          onCancel={onCancel}
-          onSubmit={onSubmit}
-        />
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <PackageIdentityFields form={form} onFormChange={onFormChange} />
+      <PackageSizeFields form={form} onFormChange={onFormChange} />
+      <PackageAmountFields form={form} onFormChange={onFormChange} />
+      <NumberField
+        label={t('admin.storagePlans.sortOrder')}
+        id="packageSortOrder"
+        value={form.sortOrder}
+        onChange={(sortOrder) => onFormChange({ ...form, sortOrder })}
+      />
+      <PackageActiveSwitch active={form.active} onChange={(active) => onFormChange({ ...form, active })} />
+      <PackageFormActions
+        editing={editing}
+        available={available}
+        pending={pending}
+        onCancel={onCancel}
+        onSubmit={onSubmit}
+      />
+    </div>
   )
 }
 
@@ -119,10 +113,10 @@ function PackageIdentityFields({
   const { t } = useTranslation()
   return (
     <>
-      <Field label={t('admin.quotaStore.packageName')} htmlFor="packageName">
+      <Field label={t('admin.storagePlans.packageName')} htmlFor="packageName">
         <Input id="packageName" value={form.name} onChange={(e) => onFormChange({ ...form, name: e.target.value })} />
       </Field>
-      <Field label={t('admin.quotaStore.description')} htmlFor="packageDescription">
+      <Field label={t('admin.storagePlans.description')} htmlFor="packageDescription">
         <Textarea
           id="packageDescription"
           value={form.description}
@@ -145,13 +139,13 @@ function PackageSizeFields({
   return (
     <div className="grid grid-cols-[1fr_96px] gap-2">
       <NumberField
-        label={t('admin.quotaStore.size')}
+        label={t('admin.storagePlans.size')}
         id="packageSize"
         min="1"
         value={form.size}
         onChange={(size) => onFormChange({ ...form, size })}
       />
-      <Field label={t('admin.quotaStore.unit')}>
+      <Field label={t('admin.storagePlans.unit')}>
         <UnitSelect value={form.unit} onChange={(unit) => onFormChange({ ...form, unit })} />
       </Field>
     </div>
@@ -169,13 +163,13 @@ function PackageAmountFields({
   return (
     <div className="grid grid-cols-[1fr_96px] gap-2">
       <NumberField
-        label={t('admin.quotaStore.amount')}
+        label={t('admin.storagePlans.amount')}
         id="packageAmount"
         min="1"
         value={form.amount}
         onChange={(amount) => onFormChange({ ...form, amount })}
       />
-      <Field label={t('admin.quotaStore.currency')}>
+      <Field label={t('admin.storagePlans.currency')}>
         <CurrencySelect value={form.currency} onChange={(currency) => onFormChange({ ...form, currency })} />
       </Field>
     </div>
@@ -237,7 +231,7 @@ function PackageActiveSwitch({ active, onChange }: { active: boolean; onChange: 
   const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between rounded-md border px-3 py-2">
-      <Label htmlFor="packageActive">{t('admin.quotaStore.active')}</Label>
+      <Label htmlFor="packageActive">{t('admin.storagePlans.active')}</Label>
       <Switch id="packageActive" checked={active} onCheckedChange={onChange} />
     </div>
   )

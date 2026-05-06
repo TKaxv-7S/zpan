@@ -175,8 +175,8 @@ export async function createCheckoutPayload(
     amount: pkg.amount,
     currency: pkg.currency,
     bytes: pkg.bytes,
-    successUrl: `${origin}/store`,
-    cancelUrl: `${origin}/store`,
+    successUrl: `${origin}/storage`,
+    cancelUrl: `${origin}/storage`,
   }
 }
 

@@ -148,7 +148,7 @@ describe('Quota Store API', () => {
     expect(updated.status).toBe(200)
     await expect(updated.json()).resolves.toMatchObject({
       enabled: false,
-      status: 'store_disabled',
+      status: 'ready',
     })
   })
 
@@ -237,8 +237,8 @@ describe('Quota Store API', () => {
     const [, init] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
     const body = JSON.parse(init.body as string)
     expect(body).toMatchObject({
-      successUrl: 'http://localhost/store',
-      cancelUrl: 'http://localhost/store',
+      successUrl: 'http://localhost/storage',
+      cancelUrl: 'http://localhost/storage',
     })
   })
 
@@ -287,8 +287,8 @@ describe('Quota Store API', () => {
     const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
     const checkoutBody = JSON.parse(String(checkoutInit.body))
     expect(checkoutBody).toMatchObject({
-      successUrl: 'http://localhost/store',
-      cancelUrl: 'http://localhost/store',
+      successUrl: 'http://localhost/storage',
+      cancelUrl: 'http://localhost/storage',
     })
   })
 
@@ -310,8 +310,8 @@ describe('Quota Store API', () => {
     const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
     const checkoutBody = JSON.parse(String(checkoutInit.body))
     expect(checkoutBody).toMatchObject({
-      successUrl: 'https://files.example.com/store',
-      cancelUrl: 'https://files.example.com/store',
+      successUrl: 'https://files.example.com/storage',
+      cancelUrl: 'https://files.example.com/storage',
     })
   })
 
@@ -333,8 +333,8 @@ describe('Quota Store API', () => {
     const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
     const checkoutBody = JSON.parse(String(checkoutInit.body))
     expect(checkoutBody).toMatchObject({
-      successUrl: 'https://auth.example.com/store',
-      cancelUrl: 'https://auth.example.com/store',
+      successUrl: 'https://auth.example.com/storage',
+      cancelUrl: 'https://auth.example.com/storage',
     })
   })
 
@@ -356,8 +356,8 @@ describe('Quota Store API', () => {
     const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
     const checkoutBody = JSON.parse(String(checkoutInit.body))
     expect(checkoutBody).toMatchObject({
-      successUrl: 'http://localhost/store',
-      cancelUrl: 'http://localhost/store',
+      successUrl: 'http://localhost/storage',
+      cancelUrl: 'http://localhost/storage',
     })
   })
 
@@ -379,8 +379,8 @@ describe('Quota Store API', () => {
     const [, checkoutInit] = vi.mocked(fetch).mock.calls[0] as [URL, RequestInit]
     const checkoutBody = JSON.parse(String(checkoutInit.body))
     expect(checkoutBody).toMatchObject({
-      successUrl: 'http://localhost/store',
-      cancelUrl: 'http://localhost/store',
+      successUrl: 'http://localhost/storage',
+      cancelUrl: 'http://localhost/storage',
     })
   })
 
@@ -715,8 +715,8 @@ describe('Quota Store API', () => {
       amount: 500,
       currency: 'usd',
       bytes: 4096,
-      successUrl: 'http://localhost/store',
-      cancelUrl: 'http://localhost/store',
+      successUrl: 'http://localhost/storage',
+      cancelUrl: 'http://localhost/storage',
     })
     expect(checkoutBody).not.toHaveProperty('session')
     expect(redemptionBody).toMatchObject({

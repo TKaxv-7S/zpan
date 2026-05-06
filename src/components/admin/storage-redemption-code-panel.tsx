@@ -1,11 +1,19 @@
 import type { GenerateStorageCodesInput, StorageCodeStatus } from '@shared/schemas'
 import type { StorageRedemptionCode } from '@shared/types'
 import { Ban, Plus } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -28,11 +36,19 @@ export function codeInputFromForm(form: CodeFormState): GenerateStorageCodesInpu
   return input
 }
 
-export function QuotaStoreCodePanel(props: CodeGenerateFormProps & CodeListProps) {
+export function StorageRedemptionCodePanel(props: CodeGenerateFormProps & CodeListProps) {
+  const { t } = useTranslation()
   return (
-    <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-      <CodeGenerateForm {...props} />
-      <CodeList {...props} />
+    <div className="space-y-3">
+      <CodeToolbar {...props} />
+      <div className="space-y-2">
+        <CodeTable {...props} />
+        {props.codes.length === 0 && (
+          <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+            {t('admin.storagePlans.codes.empty')}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -45,35 +61,73 @@ type CodeGenerateFormProps = {
   onGenerate: () => void
 }
 
+function CodeToolbar(props: CodeGenerateFormProps & Pick<CodeListProps, 'status' | 'onStatusChange'>) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <CodeStatusSelect status={props.status} onStatusChange={props.onStatusChange} />
+      <CodeGenerateDialog {...props}>
+        <Button disabled={!props.available}>
+          <Plus className="mr-2 h-4 w-4" />
+          {t('admin.storagePlans.codes.generateTitle')}
+        </Button>
+      </CodeGenerateDialog>
+    </div>
+  )
+}
+
+function CodeGenerateDialog({
+  children,
+  ...props
+}: CodeGenerateFormProps & {
+  children: ReactNode
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t('admin.storagePlans.codes.generateTitle')}</DialogTitle>
+          <DialogDescription>{t('admin.storagePlans.codes.generateDescription')}</DialogDescription>
+        </DialogHeader>
+        <CodeGenerateForm
+          {...props}
+          onGenerate={() => {
+            props.onGenerate()
+            setOpen(false)
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function CodeGenerateForm({ form, available, pending, onFormChange, onGenerate }: CodeGenerateFormProps) {
   const { t } = useTranslation()
   return (
-    <Card className="border-border/60">
-      <CardHeader>
-        <CardTitle>{t('admin.quotaStore.codes.generateTitle')}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <SizeFields form={form} onFormChange={onFormChange} />
-        <NumberField
-          id="codeMaxUses"
-          label={t('admin.quotaStore.codes.maxUses')}
-          value={form.maxUses}
-          onChange={(maxUses) => onFormChange({ ...form, maxUses })}
-        />
-        <DateField value={form.expiresAt} onChange={(expiresAt) => onFormChange({ ...form, expiresAt })} />
-        <NumberField
-          id="codeCount"
-          label={t('admin.quotaStore.codes.count')}
-          value={form.count}
-          max="100"
-          onChange={(count) => onFormChange({ ...form, count })}
-        />
-        <Button className="w-full" disabled={!available || pending} onClick={onGenerate}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t('admin.quotaStore.codes.generate')}
-        </Button>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <SizeFields form={form} onFormChange={onFormChange} />
+      <NumberField
+        id="codeMaxUses"
+        label={t('admin.storagePlans.codes.maxUses')}
+        value={form.maxUses}
+        onChange={(maxUses) => onFormChange({ ...form, maxUses })}
+      />
+      <DateField value={form.expiresAt} onChange={(expiresAt) => onFormChange({ ...form, expiresAt })} />
+      <NumberField
+        id="codeCount"
+        label={t('admin.storagePlans.codes.count')}
+        value={form.count}
+        max="100"
+        onChange={(count) => onFormChange({ ...form, count })}
+      />
+      <Button className="w-full" disabled={!available || pending} onClick={onGenerate}>
+        <Plus className="mr-2 h-4 w-4" />
+        {t('admin.storagePlans.codes.generate')}
+      </Button>
+    </div>
   )
 }
 
@@ -83,11 +137,11 @@ function SizeFields({ form, onFormChange }: { form: CodeFormState; onFormChange:
     <div className="grid grid-cols-[1fr_96px] gap-2">
       <NumberField
         id="codeSize"
-        label={t('admin.quotaStore.size')}
+        label={t('admin.storagePlans.size')}
         value={form.size}
         onChange={(size) => onFormChange({ ...form, size })}
       />
-      <Field label={t('admin.quotaStore.unit')}>
+      <Field label={t('admin.storagePlans.unit')}>
         <Select value={form.unit} onValueChange={(unit: Unit) => onFormChange({ ...form, unit })}>
           <SelectTrigger>
             <SelectValue />
@@ -128,7 +182,7 @@ function NumberField({
 function DateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const { t } = useTranslation()
   return (
-    <Field label={t('admin.quotaStore.codes.expiresAt')} htmlFor="codeExpiresAt">
+    <Field label={t('admin.storagePlans.codes.expiresAt')} htmlFor="codeExpiresAt">
       <Input
         id="codeExpiresAt"
         type="datetime-local"
@@ -148,34 +202,21 @@ type CodeListProps = {
   onRevoke: (code: string) => void
 }
 
-function CodeList(props: CodeListProps) {
-  return (
-    <div className="space-y-3">
-      <CodeListToolbar status={props.status} onStatusChange={props.onStatusChange} />
-      <CodeTable {...props} />
-      {props.codes.length === 0 && <CodeEmptyState />}
-    </div>
-  )
-}
-
-function CodeListToolbar({ status, onStatusChange }: Pick<CodeListProps, 'status' | 'onStatusChange'>) {
+function CodeStatusSelect({ status, onStatusChange }: Pick<CodeListProps, 'status' | 'onStatusChange'>) {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <h3 className="text-sm font-medium">{t('admin.quotaStore.codes.listTitle')}</h3>
-      <Select value={status} onValueChange={(value: StorageCodeStatus | 'all') => onStatusChange(value)}>
-        <SelectTrigger className="h-9 w-full sm:w-44">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {(['all', 'active', 'redeemed', 'expired'] as const).map((value) => (
-            <SelectItem key={value} value={value}>
-              {t(`admin.quotaStore.codes.status.${value}`)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <Select value={status} onValueChange={(value: StorageCodeStatus | 'all') => onStatusChange(value)}>
+      <SelectTrigger className="h-9 w-full sm:w-44">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {(['all', 'active', 'redeemed', 'expired', 'revoked'] as const).map((value) => (
+          <SelectItem key={value} value={value}>
+            {t(`admin.storagePlans.codes.status.${value}`)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -187,7 +228,7 @@ function CodeTable(props: CodeListProps) {
         <TableHeader>
           <TableRow>
             {['code', 'storage', 'uses', 'expires', 'statusLabel'].map((key) => (
-              <TableHead key={key}>{t(`admin.quotaStore.codes.${key}`)}</TableHead>
+              <TableHead key={key}>{t(`admin.storagePlans.codes.${key}`)}</TableHead>
             ))}
             <TableHead className="text-right">{t('common.actions')}</TableHead>
           </TableRow>
@@ -204,6 +245,8 @@ function CodeTable(props: CodeListProps) {
 
 function CodeRow({ code, available, revokingCode, onRevoke }: CodeListProps & { code: StorageRedemptionCode }) {
   const { t } = useTranslation()
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const revoked = Boolean(code.revokedAt)
   return (
     <TableRow>
       <TableCell className="font-mono text-xs">{code.code}</TableCell>
@@ -219,12 +262,35 @@ function CodeRow({ code, available, revokingCode, onRevoke }: CodeListProps & { 
         <Button
           variant="outline"
           size="sm"
-          disabled={!available || Boolean(code.revokedAt) || revokingCode === code.code}
-          onClick={() => onRevoke(code.code)}
+          disabled={!available || revoked || revokingCode === code.code}
+          onClick={() => setConfirmOpen(true)}
         >
           <Ban className="mr-2 h-4 w-4" />
-          {t('admin.quotaStore.codes.revoke')}
+          {t('admin.storagePlans.codes.revoke')}
         </Button>
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t('admin.storagePlans.codes.revokeTitle')}</DialogTitle>
+              <DialogDescription>{t('admin.storagePlans.codes.revokeConfirm', { code: code.code })}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" disabled={revokingCode === code.code} onClick={() => setConfirmOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={revokingCode === code.code}
+                onClick={() => {
+                  onRevoke(code.code)
+                  setConfirmOpen(false)
+                }}
+              >
+                {t('admin.storagePlans.codes.revoke')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </TableCell>
     </TableRow>
   )
@@ -235,7 +301,7 @@ function CodeStatusBadge({ code }: { code: StorageRedemptionCode }) {
   const status = getCodeStatus(code)
   return (
     <Badge variant={status === 'active' ? 'default' : 'secondary'}>
-      {t(`admin.quotaStore.codes.status.${status}`)}
+      {t(`admin.storagePlans.codes.status.${status}`)}
     </Badge>
   )
 }
@@ -246,15 +312,6 @@ function getCodeStatus(code: StorageRedemptionCode) {
   if (expired) return 'expired'
   if (code.usesCount >= code.maxUses) return 'redeemed'
   return 'active'
-}
-
-function CodeEmptyState() {
-  const { t } = useTranslation()
-  return (
-    <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-      {t('admin.quotaStore.codes.empty')}
-    </div>
-  )
 }
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {

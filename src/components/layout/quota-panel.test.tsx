@@ -13,7 +13,15 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
+  Link: ({ to, children, ...props }: { to: string; children: ReactNode }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+}))
+
+vi.mock('@/lib/auth-client', () => ({
+  useActiveOrganization: () => ({ data: null }),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -81,7 +89,7 @@ afterEach(() => {
 })
 
 describe('QuotaPanel', () => {
-  it('hides the store entry when the store is unavailable', async () => {
+  it('keeps the storage area clickable when the store is unavailable', async () => {
     vi.mocked(getUserQuota).mockResolvedValue({ orgId: 'org-1', baseQuota: 100, grantedQuota: 0, quota: 100, used: 25 })
     vi.mocked(listPurchasableQuotaPackages).mockRejectedValue(new Error('quota_store_disabled'))
     vi.mocked(listQuotaGrants).mockResolvedValue({ items: [], total: 0 })
@@ -89,18 +97,18 @@ describe('QuotaPanel', () => {
     const view = renderQuotaPanel()
 
     await waitFor(() => expect(view.getByText('quota.storage')).toBeTruthy())
-    expect(view.queryByText('nav.store')).toBeNull()
+    expect(view.getByRole('link', { name: 'quota.storage' }).getAttribute('href')).toBe('/storage')
     expect(listQuotaGrants).not.toHaveBeenCalled()
   })
 
-  it('shows the store entry when redemption is available without packages', async () => {
+  it('loads grants when redemption is available without packages', async () => {
     vi.mocked(getUserQuota).mockResolvedValue({ orgId: 'org-1', baseQuota: 100, grantedQuota: 0, quota: 100, used: 25 })
     vi.mocked(listPurchasableQuotaPackages).mockResolvedValue({ items: [], total: 0 })
     vi.mocked(listQuotaGrants).mockResolvedValue({ items: [], total: 0 })
 
     const view = renderQuotaPanel()
 
-    await waitFor(() => expect(view.getByText('nav.store')).toBeTruthy())
+    await waitFor(() => expect(view.getByRole('link', { name: 'quota.storage' })).toBeTruthy())
     expect(listQuotaGrants).toHaveBeenCalled()
   })
 
@@ -120,7 +128,7 @@ describe('QuotaPanel', () => {
 
     const view = renderQuotaPanel()
 
-    await waitFor(() => expect(view.getByText('nav.store')).toBeTruthy())
+    await waitFor(() => expect(view.getByRole('link', { name: 'quota.storage' })).toBeTruthy())
     await waitFor(() => expect(view.getByText('quota.purchased:100 GB')).toBeTruthy())
   })
 })

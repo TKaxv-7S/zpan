@@ -24,7 +24,7 @@ export const redemptionInputSchema = z.object({
   targetOrgId: z.string().min(1),
 })
 
-export const storageCodeStatusSchema = z.enum(['active', 'redeemed', 'expired'])
+export const storageCodeStatusSchema = z.enum(['active', 'redeemed', 'expired', 'revoked'])
 
 export const generateStorageCodesInputSchema = z.object({
   bytes: z.number().int().positive(),

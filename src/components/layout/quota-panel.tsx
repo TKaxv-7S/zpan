@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { HardDrive, PlusCircle } from 'lucide-react'
+import { HardDrive } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
 import { getUserQuota, listPurchasableQuotaPackages, listQuotaGrants } from '@/lib/api'
+import { useActiveOrganization } from '@/lib/auth-client'
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -15,19 +15,21 @@ function formatSize(bytes: number): string {
 
 export function QuotaPanel({ enabled }: { enabled: boolean }) {
   const { t } = useTranslation()
+  const { data: activeOrg } = useActiveOrganization()
+  const workspaceId = activeOrg?.id ?? 'personal'
   const { data: quota } = useQuery({
-    queryKey: ['user', 'quota'],
+    queryKey: ['user', 'quota', workspaceId],
     queryFn: getUserQuota,
     enabled,
   })
   const packagesQuery = useQuery({
-    queryKey: ['quota-store', 'packages'],
+    queryKey: ['storage-plans', 'packages'],
     queryFn: listPurchasableQuotaPackages,
     enabled,
     retry: false,
   })
   const { data: grants } = useQuery({
-    queryKey: ['quota-store', 'grants'],
+    queryKey: ['storage-plans', 'grants', workspaceId],
     queryFn: listQuotaGrants,
     enabled: enabled && packagesQuery.isSuccess,
   })
@@ -37,10 +39,12 @@ export function QuotaPanel({ enabled }: { enabled: boolean }) {
   const purchasedBytes = (grants?.items ?? [])
     .filter((grant) => grant.active && grant.orgId === quota.orgId)
     .reduce((sum, grant) => sum + grant.bytes, 0)
-  const hasStore = packagesQuery.isSuccess
-
   return (
-    <div className="border-t px-5 py-3">
+    <Link
+      to="/storage"
+      className="block border-t px-5 py-3 text-sidebar-foreground transition-colors hover:bg-sidebar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring active:bg-sidebar-hover"
+      aria-label={t('quota.storage')}
+    >
       <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-sidebar-foreground">
         <HardDrive className="h-3.5 w-3.5" />
         <span>{t('quota.storage')}</span>
@@ -68,14 +72,6 @@ export function QuotaPanel({ enabled }: { enabled: boolean }) {
           {t('quota.purchased', { amount: formatSize(purchasedBytes) })}
         </p>
       )}
-      {hasStore && (
-        <Button variant="outline" size="sm" className="mt-3 w-full justify-start" asChild>
-          <Link to="/store">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            {t('nav.store')}
-          </Link>
-        </Button>
-      )}
-    </div>
+    </Link>
   )
 }

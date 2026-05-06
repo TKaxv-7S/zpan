@@ -330,7 +330,7 @@ function settingsDto(row: typeof quotaStoreSettings.$inferSelect, cloudReady = t
   return {
     id: row.id,
     enabled: row.enabled,
-    status: row.enabled ? (cloudReady ? 'ready' : 'cloud_unbound') : 'store_disabled',
+    status: cloudReady ? 'ready' : 'cloud_unbound',
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
