@@ -8,6 +8,7 @@ import {
   ApiError,
   createQuotaStorePackage,
   deleteQuotaStorePackage,
+  deleteStorageRedemptionCode,
   generateStorageRedemptionCodes,
   getQuotaStoreSettings,
   listAdminQuotaDeliveryRecords,
@@ -57,6 +58,7 @@ vi.mock('@/lib/api', () => {
     ApiError: MockApiError,
     createQuotaStorePackage: vi.fn(),
     deleteQuotaStorePackage: vi.fn(),
+    deleteStorageRedemptionCode: vi.fn(),
     generateStorageRedemptionCodes: vi.fn(),
     getQuotaStoreSettings: vi.fn(),
     listAdminQuotaDeliveryRecords: vi.fn(),
@@ -385,7 +387,7 @@ describe('AdminStoragePlansPage', () => {
       total: 1,
     })
     vi.mocked(generateStorageRedemptionCodes).mockResolvedValue({ items: [], total: 0 })
-    vi.mocked(revokeStorageRedemptionCode).mockResolvedValue({ code: 'ZS-CODE-1', deleted: true })
+    vi.mocked(revokeStorageRedemptionCode).mockResolvedValue({ code: 'ZS-CODE-1', revoked: true })
 
     const view = renderAdminPage()
 
@@ -414,6 +416,42 @@ describe('AdminStoragePlansPage', () => {
     fireEvent.click(within(revokeDialog).getByRole('button', { name: 'admin.storagePlans.codes.revoke' }))
 
     await waitFor(() => expect(revokeStorageRedemptionCode).toHaveBeenCalledWith('ZS-CODE-1', expect.anything()))
+  })
+
+  it('deletes an eligible storage redemption code from the codes tab', async () => {
+    vi.mocked(getQuotaStoreSettings).mockResolvedValue(settings())
+    vi.mocked(listQuotaStorePackages).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(listStorageRedemptionCodes).mockResolvedValue({
+      items: [
+        {
+          code: 'ZS-CODE-1',
+          resourceType: 'storage',
+          resourceBytes: 107374182400,
+          maxUses: 1,
+          usesCount: 0,
+          expiresAt: null,
+          createdAt: '2026-05-05T00:00:00.000Z',
+          revokedAt: null,
+        },
+      ],
+      total: 1,
+    })
+    vi.mocked(deleteStorageRedemptionCode).mockResolvedValue({ code: 'ZS-CODE-1', deleted: true })
+
+    const view = renderAdminPage()
+
+    await waitFor(() => expect(view.getByRole('tab', { name: 'admin.storagePlans.tabs.codes' })).toBeTruthy())
+    fireEvent.click(view.getByRole('tab', { name: 'admin.storagePlans.tabs.codes' }))
+    await waitFor(() => expect(view.getByText('ZS-CODE-1')).toBeTruthy())
+
+    fireEvent.click(view.getByRole('button', { name: 'admin.storagePlans.codes.delete' }))
+    expect(deleteStorageRedemptionCode).not.toHaveBeenCalled()
+
+    const deleteDialog = await view.findByRole('dialog')
+    expect(within(deleteDialog).getByText('admin.storagePlans.codes.deleteTitle')).toBeTruthy()
+    fireEvent.click(within(deleteDialog).getByRole('button', { name: 'admin.storagePlans.codes.delete' }))
+
+    await waitFor(() => expect(deleteStorageRedemptionCode).toHaveBeenCalledWith('ZS-CODE-1', expect.anything()))
   })
 
   it('shows redemption codes in a table and opens generation fields in a dialog', async () => {
