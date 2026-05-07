@@ -189,6 +189,66 @@ afterEach(() => {
 
 describe('Quota Store API', () => {
   it('parses Cloud package and storage-code response shapes', () => {
+    // legacy camelCase: resourceType/resourceBytes
+    expect(
+      cloudPackageResponseSchema.parse({
+        id: 'pkg-camel-legacy',
+        name: 'Camel Legacy',
+        description: null,
+        resourceType: 'storage',
+        resourceBytes: 1024,
+        prices: [{ currency: 'usd', amount: 500 }],
+        active: true,
+        sortOrder: 1,
+        createdAt: '2026-05-06T00:00:00.000Z',
+        updatedAt: '2026-05-06T00:00:00.000Z',
+      }),
+    ).toEqual({
+      id: 'pkg-camel-legacy',
+      name: 'Camel Legacy',
+      description: '',
+      storageBytes: 1024,
+      trafficBytes: 0,
+      prices: [{ currency: 'usd', amount: 500 }],
+      active: true,
+      sortOrder: 1,
+      createdAt: '2026-05-06T00:00:00.000Z',
+      updatedAt: '2026-05-06T00:00:00.000Z',
+    })
+
+    // legacy camelCase: resourceType/resourceBytes (traffic case to cover both ternary branches)
+    expect(
+      cloudPackageResponseSchema.parse({
+        id: 'pkg-camel-legacy-traffic',
+        name: 'Camel Legacy Traffic',
+        description: null,
+        resourceType: 'traffic',
+        resourceBytes: 512,
+        prices: [{ currency: 'usd', amount: 200 }],
+        active: true,
+        sortOrder: 0,
+        createdAt: '2026-05-06T00:00:00.000Z',
+        updatedAt: '2026-05-06T00:00:00.000Z',
+      }),
+    ).toMatchObject({ storageBytes: 0, trafficBytes: 512 })
+
+    // legacy snake_case: resource_type/resource_bytes (storage case to cover both ternary branches)
+    expect(
+      cloudPackageResponseSchema.parse({
+        id: 'pkg-snake-storage',
+        name: 'Snake Storage',
+        description: null,
+        resource_type: 'storage',
+        resource_bytes: 2048,
+        prices: [{ currency: 'cny', unit_amount: 3600 }],
+        active: true,
+        sort_order: 4,
+        created_at: '2026-05-06T00:00:00.000Z',
+        updated_at: '2026-05-06T00:00:00.000Z',
+      }),
+    ).toMatchObject({ storageBytes: 2048, trafficBytes: 0 })
+
+    // legacy snake_case: resource_type/resource_bytes (traffic case - original test)
     expect(
       cloudPackageResponseSchema.parse({
         id: 'pkg-snake',
@@ -206,11 +266,65 @@ describe('Quota Store API', () => {
       id: 'pkg-snake',
       name: 'Snake Package',
       description: '',
-      resourceType: 'traffic',
-      resourceBytes: 2048,
+      storageBytes: 0,
+      trafficBytes: 2048,
       prices: [{ currency: 'cny', amount: 3600 }],
       active: true,
       sortOrder: 4,
+      createdAt: '2026-05-06T00:00:00.000Z',
+      updatedAt: '2026-05-06T00:00:00.000Z',
+    })
+
+    // new snake_case: storage_bytes/traffic_bytes
+    expect(
+      cloudPackageResponseSchema.parse({
+        id: 'pkg-snake-new',
+        name: 'Snake New',
+        description: null,
+        storage_bytes: 4096,
+        traffic_bytes: 8192,
+        prices: [{ currency: 'usd', amount: 999 }],
+        active: true,
+        sort_order: 2,
+        created_at: '2026-05-06T00:00:00.000Z',
+        updated_at: '2026-05-06T00:00:00.000Z',
+      }),
+    ).toEqual({
+      id: 'pkg-snake-new',
+      name: 'Snake New',
+      description: '',
+      storageBytes: 4096,
+      trafficBytes: 8192,
+      prices: [{ currency: 'usd', amount: 999 }],
+      active: true,
+      sortOrder: 2,
+      createdAt: '2026-05-06T00:00:00.000Z',
+      updatedAt: '2026-05-06T00:00:00.000Z',
+    })
+
+    // new camelCase: storageBytes/trafficBytes
+    expect(
+      cloudPackageResponseSchema.parse({
+        id: 'pkg-camel-new',
+        name: 'Camel New',
+        description: null,
+        storageBytes: 2048,
+        trafficBytes: 0,
+        prices: [{ currency: 'eur', amount: 799 }],
+        active: false,
+        sortOrder: 5,
+        createdAt: '2026-05-06T00:00:00.000Z',
+        updatedAt: '2026-05-06T00:00:00.000Z',
+      }),
+    ).toEqual({
+      id: 'pkg-camel-new',
+      name: 'Camel New',
+      description: '',
+      storageBytes: 2048,
+      trafficBytes: 0,
+      prices: [{ currency: 'eur', amount: 799 }],
+      active: false,
+      sortOrder: 5,
       createdAt: '2026-05-06T00:00:00.000Z',
       updatedAt: '2026-05-06T00:00:00.000Z',
     })
@@ -292,7 +406,7 @@ describe('Quota Store API', () => {
     const res = await app.request('/api/admin/quota-store/packages', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Bad', description: '', resourceType: 'storage', resourceBytes: 0, prices: [] }),
+      body: JSON.stringify({ name: 'Bad', description: '', storageBytes: 0, trafficBytes: 0, prices: [] }),
     })
 
     expect(res.status).toBe(400)
@@ -366,8 +480,7 @@ describe('Quota Store API', () => {
       body: JSON.stringify({
         name: 'Small',
         description: 'starter',
-        resourceType: 'storage',
-        resourceBytes: 4096,
+        storageBytes: 4096,
         prices: [{ currency: 'usd', amount: 500 }],
       }),
     })
@@ -382,8 +495,7 @@ describe('Quota Store API', () => {
     expect(JSON.parse(body)).toMatchObject({
       name: 'Small',
       description: 'starter',
-      resourceType: 'storage',
-      resourceBytes: 4096,
+      storageBytes: 4096,
       prices: [{ currency: 'usd', amount: 500 }],
     })
     expect(JSON.parse(body)).not.toHaveProperty('callbackUrl')
@@ -433,8 +545,7 @@ describe('Quota Store API', () => {
       body: JSON.stringify({
         name: 'Updated',
         description: '',
-        resourceType: 'traffic',
-        resourceBytes: 8192,
+        trafficBytes: 8192,
         prices: [{ currency: 'cny', amount: 900 }],
       }),
     })
@@ -442,7 +553,7 @@ describe('Quota Store API', () => {
     expect(listed.status).toBe(200)
     await expect(listed.json()).resolves.toMatchObject({
       total: 1,
-      items: [{ id: 'cloud-pkg-object', description: '', resourceType: 'traffic', sortOrder: 3 }],
+      items: [{ id: 'cloud-pkg-object', description: '', trafficBytes: 4096, storageBytes: 0, sortOrder: 3 }],
     })
     expect(updated.status).toBe(200)
     const [, updateInit] = vi.mocked(fetch).mock.calls[1] as [URL, RequestInit]
@@ -450,8 +561,8 @@ describe('Quota Store API', () => {
     expect(JSON.parse(updateInit.body as string)).toEqual({
       name: 'Updated',
       description: '',
-      resourceType: 'traffic',
-      resourceBytes: 8192,
+      trafficBytes: 8192,
+      storageBytes: 0,
       prices: [{ currency: 'cny', amount: 900 }],
       active: true,
       sortOrder: 0,
@@ -485,8 +596,7 @@ describe('Quota Store API', () => {
       body: JSON.stringify({
         name: 'Configured',
         description: '',
-        resourceType: 'storage',
-        resourceBytes: 4096,
+        storageBytes: 4096,
         prices: [{ currency: 'usd', amount: 500 }],
       }),
     })
@@ -541,8 +651,7 @@ describe('Quota Store API', () => {
       body: JSON.stringify({
         name: 'Bad Proto',
         description: '',
-        resourceType: 'storage',
-        resourceBytes: 4096,
+        storageBytes: 4096,
         prices: [{ currency: 'usd', amount: 500 }],
       }),
     })
@@ -685,8 +794,7 @@ describe('Quota Store API', () => {
       body: JSON.stringify({
         name: 'Small',
         description: '',
-        resourceType: 'storage',
-        resourceBytes: 4096,
+        storageBytes: 4096,
         prices: [{ currency: 'usd', amount: 500 }],
       }),
     })
@@ -708,8 +816,7 @@ describe('Quota Store API', () => {
       body: JSON.stringify({
         name: 'Small',
         description: '',
-        resourceType: 'storage',
-        resourceBytes: 4096,
+        storageBytes: 4096,
         prices: [{ currency: 'usd', amount: 500 }],
       }),
     })
@@ -718,7 +825,7 @@ describe('Quota Store API', () => {
     await expect(res.json()).resolves.toEqual({ error: 'invalid_cloud_response' })
   })
 
-  it('rejects price currencies Cloud does not accept', async () => {
+  it('rejects prices with empty currency strings', async () => {
     const { app, db } = await createTestApp()
     await seedProLicense(db)
     const headers = await adminHeaders(app)
@@ -727,11 +834,10 @@ describe('Quota Store API', () => {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: 'Euro',
+        name: 'Bad Currency',
         description: '',
-        resourceType: 'storage',
-        resourceBytes: 4096,
-        prices: [{ currency: 'eur', amount: 500 }],
+        storageBytes: 4096,
+        prices: [{ currency: '', amount: 500 }],
       }),
     })
 
@@ -757,8 +863,7 @@ describe('Quota Store API', () => {
       body: JSON.stringify({
         name: 'Small',
         description: '',
-        resourceType: 'storage',
-        resourceBytes: 4096,
+        storageBytes: 4096,
         prices: [{ currency: 'usd', amount: 500 }],
       }),
     })
